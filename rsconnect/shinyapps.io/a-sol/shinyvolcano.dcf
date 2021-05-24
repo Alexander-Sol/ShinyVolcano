@@ -1,0 +1,11 @@
+name: shinyvolcano
+title:
+username:
+account: a-sol
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 4161196
+bundleId: 4628029
+url: https://a-sol.shinyapps.io/shinyvolcano/
+when: 1621696247.89058
+lastSyncTime: 1621696247.89058
