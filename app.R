@@ -75,6 +75,7 @@ ui <- fluidPage(
                         value = 4,
                         step = 0.25),
             
+            "Note: Point Transparency must be set to 1 to be compatible with the .eps file format",
             sliderInput("pointAlpha",
                         "Point Transparency",
                         min = 0.05,
