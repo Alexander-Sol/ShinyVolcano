@@ -14,6 +14,7 @@ library(ggplot2)
 library(ggrepel)
 library(ggalt)
 library(ggrastr)
+library(shinyWidgets)
 
 IWP2 <- "#B856D7"
 CHIR <- "#55A0FB"
@@ -29,7 +30,12 @@ gene.sets <- list(
     Day_109 = c("GATA3", "NR2F1", "INSM1", "HES6", "TMPRSS3", "GNG8", "ZNF503",
                  "TEKT1", "NEUROD6", "ZBBX", "CD164L2", "PCDH20", "SKOR1", "VEPH1", "TEKT2", "TCTEX1D1")
 )
-                        
+
+textInputRow<-function (inputId, label, value = ""){
+  div(style="display:inline-block",
+      tags$label(label, `for` = inputId), 
+      tags$input(id = inputId, type = "text", value = value, class="input-small"))
+}             
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -44,15 +50,6 @@ ui <- fluidPage(
     # Application title
     titlePanel("Volcano Plot Customization"),
     
-    selectInput("dataset", "Dataset",
-      c("Day 20 Prosensory" = "Day_20",
-        "Day 109 Hair Cells" = "Day_109")
-    ),
-    
-    selectInput("drawLabels", "Labels",
-                choices = c("On" = T,
-                            "Off" = F)),
-    
     actionButton("plotCustomize", "Show/Hide Plot Options"),
     
     actionButton("colorCustomize", "Show/Hide Color Options"),
@@ -60,7 +57,13 @@ ui <- fluidPage(
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
         sidebarPanel(
-            
+          
+          selectInput("dataset", "Dataset",
+                      c("Day 20 Prosensory" = "Day_20",
+                        "Day 109 Hair Cells" = "Day_109"),
+                      width = '200px'
+          ),
+          
           conditionalPanel(
             #-----------
             condition = "output.showPlotControls",
@@ -94,19 +97,24 @@ ui <- fluidPage(
             h5("Note:"),
             helpText("Point Transparency must be set to 1 to be compatible with the .eps file format"),
             
-            sliderInput("labelSize",
-                        "Label Size",
-                        min = 4,
-                        max = 24,
-                        value = 8,
-                        step = 1),
-              
             sliderInput("xlim",
                         "X-Axis Bounds",
                         min = 3,
                         max = 12,
                         value = 6,
                         step = 0.25),
+            
+            sliderInput("labelSize",
+                        "Label Size",
+                        min = 4,
+                        max = 24,
+                        value = 8,
+                        step = 1),
+            
+            prettySwitch("drawLabels",
+                         "Labels",
+                          value = TRUE,
+                         width = "125px")
             
             
           ),
@@ -134,14 +142,13 @@ ui <- fluidPage(
           ),
             
           #Managing plot downloads
-          fluidRow(
-            textInput("downloadWidth", "Download Width (in)", 8),
-            textInput("downloadHeight", "Download Height (in)", 6)
-          ),
+          textInputRow(inputId="downloadWidth", label="Download Width (in)", value = 8.0),
+          textInputRow(inputId="downloadHeight", label="Download Height (in)", value = 6.0),
+          br(),
           downloadButton("VolcanoPlotImage", "Download Plot as .png"),
           downloadButton("VolcanoPlotEPS", "Download Plot as .eps file")
         ),
-
+      
         # Show a plot of the generated distribution
         mainPanel(
            plotOutput("volcanoPlot", height = "600px")
