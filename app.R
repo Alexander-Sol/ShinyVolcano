@@ -42,18 +42,28 @@ ui <- fluidPage(
     ),
 
     # Application title
-    titlePanel("Day 20 Volcano Plot Customization"),
+    titlePanel("Volcano Plot Customization"),
+    
+    selectInput("dataset", "Dataset",
+      c("Day 20 Prosensory" = "Day_20",
+        "Day 109 Hair Cells" = "Day_109")
+    ),
+    
+    selectInput("drawLabels", "Labels",
+                choices = c("On" = T,
+                            "Off" = F)),
+    
+    actionButton("plotCustomize", "Show/Hide Plot Options"),
+    
+    actionButton("colorCustomize", "Show/Hide Color Options"),
 
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
         sidebarPanel(
             
-            selectInput(
-              "dataset",
-              "Dataset",
-              c("Day 20 Prosensory" = "Day_20",
-                "Day 109 Hair Cells" = "Day_109")
-            ),
+          conditionalPanel(
+            #-----------
+            condition = "output.showPlotControls",
             
             sliderInput("logpval",
                         "-Log10 p-value",
@@ -75,13 +85,14 @@ ui <- fluidPage(
                         value = 4,
                         step = 0.25),
             
-            "Note: Point Transparency must be set to 1 to be compatible with the .eps file format",
             sliderInput("pointAlpha",
                         "Point Transparency",
                         min = 0.05,
                         max = 1,
                         value = 0.5,
                         step = 0.05),
+            h5("Note:"),
+            helpText("Point Transparency must be set to 1 to be compatible with the .eps file format"),
             
             sliderInput("labelSize",
                         "Label Size",
@@ -89,7 +100,7 @@ ui <- fluidPage(
                         max = 24,
                         value = 8,
                         step = 1),
-            
+              
             sliderInput("xlim",
                         "X-Axis Bounds",
                         min = 3,
@@ -97,13 +108,38 @@ ui <- fluidPage(
                         value = 6,
                         step = 0.25),
             
-            checkboxInput("drawLabels", "Labels", value = T),
             
-            #Managing plot downloads
+          ),
+          #----
+          
+          conditionalPanel(
+            #----
+            condition = "output.showColorControls",
+            fluidRow(
+              column(3,
+                     helpText("CHIR"),
+                     colourInput("chirCol", NULL, "#55A0FB"),
+                     br(),
+                     helpText("CHIR Highlight"),
+                     colourInput("chirHighlight", NULL, "#333194")
+              ),
+              column(3,
+                     helpText("IWP2"),
+                     colourInput("iwp2Col", NULL, "#B856D7"),
+                     br(),
+                     helpText("IWP2 Highlight"),
+                     colourInput("iwp2Highlight", NULL, "#8b0000")
+              ),
+            ) #----
+          ),
+            
+          #Managing plot downloads
+          fluidRow(
             textInput("downloadWidth", "Download Width (in)", 8),
-            textInput("downloadHeight", "Download Height (in)", 6),
-            downloadButton("VolcanoPlotImage", "Download Plot as .png"),
-            downloadButton("VolcanoPlotEPS", "Download Plot as .eps file")
+            textInput("downloadHeight", "Download Height (in)", 6)
+          ),
+          downloadButton("VolcanoPlotImage", "Download Plot as .png"),
+          downloadButton("VolcanoPlotEPS", "Download Plot as .eps file")
         ),
 
         # Show a plot of the generated distribution
@@ -115,6 +151,18 @@ ui <- fluidPage(
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
+  
+  output$showPlotControls <- reactive({
+    input$plotCustomize%%2 # Add whatever condition you want here. Must return TRUE or FALSE
+  })
+  
+  output$showColorControls <- reactive({
+    input$colorCustomize%%2 # Add whatever condition you want here. Must return TRUE or FALSE
+  })
+  
+  outputOptions(output, 'showPlotControls', suspendWhenHidden = FALSE)
+  
+  outputOptions(output, "showColorControls", suspendWhenHidden = FALSE)
     
     reactiveVolcano <- reactive ({
         vp.data <- datasets[[input$dataset]]
@@ -122,10 +170,10 @@ server <- function(input, output) {
         
         color.key <- ifelse(
             vp.data$log2FoldChange < input$log2FC*-1 & vp.data$padj < 10^(-input$logpval),
-            IWP2, 
+            input$iwp2Col, 
             ifelse(
                 vp.data$log2FoldChange > input$log2FC & vp.data$padj < 10^(-input$logpval),
-                CHIR,
+                input$chirCol,
                 "lightgrey"
             )
         )
@@ -138,8 +186,19 @@ server <- function(input, output) {
                                        "Below Threshold"  
                                    )
         )
-        color.key[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r")))] <- "darkred"
-        names(color.key)[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r")))] <- "Selected"
+        
+        #Define color for highlighted genes
+        color.key[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r"))  &
+                          vp.data$log2FoldChange > 0)] <- input$chirHighlight
+        
+        color.key[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r"))  &
+                          vp.data$log2FoldChange < 0)] <- input$iwp2Highlight
+        
+        names(color.key)[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r")) &
+                               vp.data$log2FoldChange > 0)] <- "Dorsal Marker Genes"
+        
+        names(color.key)[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r")) &
+                                 vp.data$log2FoldChange < 0)] <- "Ventral Marker Genes"
         
         
         # construct the volcano plot
@@ -172,7 +231,11 @@ server <- function(input, output) {
                   input$labelSize,
                   input$pointAlpha,
                   input$xlim,
-                  input$dataset)
+                  input$dataset,
+                  input$iwp2Highlight,
+                  input$chirHighlight,
+                  input$iwp2Col,
+                  input$chirCol)
 
     output$volcanoPlot <- renderPlot({
         print(reactiveVolcano())
@@ -184,7 +247,11 @@ server <- function(input, output) {
                   input$labelSize,
                   input$pointAlpha,
                   input$xlim,
-                  input$dataset)
+                  input$dataset,
+                  input$iwp2Highlight,
+                  input$chirHighlight,
+                  input$iwp2Col,
+                  input$chirCol)
     
     output$VolcanoPlotImage <- downloadHandler(
         filename = function() { paste(input$dataset, "_VolcanoPlot", '.png', sep='') },
