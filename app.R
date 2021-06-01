@@ -15,6 +15,7 @@ library(ggrepel)
 library(ggalt)
 library(ggrastr)
 library(shinyWidgets)
+library(colourpicker)
 
 IWP2 <- "#B856D7"
 CHIR <- "#55A0FB"
