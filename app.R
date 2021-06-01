@@ -32,7 +32,7 @@ gene.sets <- list(
 )
 
 textInputRow<-function (inputId, label, value = ""){
-  div(style="display:inline-block",
+  div(style="display:inline-block; width:150px; padding-bottom:10px; padding-left:5px",
       tags$label(label, `for` = inputId), 
       tags$input(id = inputId, type = "text", value = value, class="input-small"))
 }             
