@@ -26,14 +26,14 @@ datasets <- list(
 )
 
 gene.sets <- list(
-    Day_20 = c("NR2F2", "RSPO3", "EDN3", "LRP2", "SULF1", "GAS1", "PTCH1", "OTX1",
+    Day_20 = c("NR2F2", "RSPO3", "EDN3", "LRP2", "SULF1", "GAS1", "PTCH1", "OTX1", "KDM7A",
       "TAGLN", "CXCR4", "JAG1", "DLX5", "GPR155", "ACSL4", "MSX1"),
     Day_109 = c("GATA3", "NR2F1", "INSM1", "HES6", "TMPRSS3", "GNG8", "ZNF503",
                  "TEKT1", "NEUROD6", "ZBBX", "CD164L2", "PCDH20", "SKOR1", "VEPH1", "TEKT2", "TCTEX1D1")
 )
 
 textInputRow<-function (inputId, label, value = ""){
-  div(style="display:inline-block; width:150px; padding-bottom:10px; padding-left:5px",
+  div(style="display:inline-block; width:150px; padding-bottom:10px; padding-right:50px",
       tags$label(label, `for` = inputId), 
       tags$input(id = inputId, type = "text", value = value, class="input-small"))
 }             
