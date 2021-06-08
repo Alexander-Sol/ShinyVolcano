@@ -16,14 +16,15 @@ library(ggalt)
 library(ggrastr)
 library(shinyWidgets)
 library(colourpicker)
+library(plotly)
 
 IWP2 <- "#B856D7"
 CHIR <- "#55A0FB"
 
 datasets <- list(
-    Day_20 = readRDS("data/day20deseq.rds"),
-    Day_80 = readRDS("data/day80deseq.rds"),
-    Day_109 = readRDS("data/day109deseq.rds")
+    Day_20 = readRDS("data/day20deseq_verbose.rds"),
+    Day_80 = readRDS("data/day80deseq_verbose.rds"),
+    Day_109 = readRDS("data/day109deseq_verbose.rds")
 )
 
 gene.sets <- list(
@@ -145,6 +146,11 @@ ui <- fluidPage(
               ),
             ) #----
           ),
+          
+          column(width = 6,
+                 verbatimTextOutput("clickTable")
+          ),
+          br(),
             
           #Managing plot downloads
           textInputRow(inputId="downloadWidth", label="Download Width (in)", value = 8.0),
@@ -156,7 +162,8 @@ ui <- fluidPage(
       
         # Show a plot of the generated distribution
         mainPanel(
-           plotOutput("volcanoPlot", height = "600px")
+           plotOutput("volcanoPlot", height = "600px",
+                      click = "plot_click")
         )
     )
 )
@@ -176,122 +183,138 @@ server <- function(input, output) {
   
   outputOptions(output, "showColorControls", suspendWhenHidden = FALSE)
     
-    reactiveVolcano <- reactive ({
-        vp.data <- datasets[[input$dataset]]
-        genes.of.interest <- gene.sets[[input$dataset]]
-        
-        color.key <- ifelse(
-            vp.data$log2FoldChange < input$log2FC*-1 & vp.data$padj < 10^(-input$logpval),
-            input$iwp2Col, 
-            ifelse(
-                vp.data$log2FoldChange > input$log2FC & vp.data$padj < 10^(-input$logpval),
-                input$chirCol,
-                "lightgrey"
-            )
-        )
-        
-        names(color.key) <- ifelse(vp.data$log2FoldChange < input$log2FC*-1 & vp.data$padj < 10^(-input$logpval),
-                                   "IWP2",
-                                   ifelse(
-                                       vp.data$log2FoldChange > input$log2FC & vp.data$padj < 10^(-input$logpval),
-                                       "CHIR",
-                                       "Below Threshold"  
-                                   )
-        )
-        
-        #Define color for highlighted genes
-        color.key[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r"))  &
-                          vp.data$log2FoldChange > 0)] <- input$chirHighlight
-        
-        color.key[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r"))  &
-                          vp.data$log2FoldChange < 0)] <- input$iwp2Highlight
-        
-        names(color.key)[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r")) &
-                               vp.data$log2FoldChange > 0)] <- "Dorsal Marker Genes"
-        
-        names(color.key)[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r")) &
-                                 vp.data$log2FoldChange < 0)] <- "Ventral Marker Genes"
-        
-        
-        # construct the volcano plot
-        EnhancedVolcano(
-            toptable = vp.data,
-            lab = vp.data$gene,
-            x = "log2FoldChange",
-            y = "padj",
-            title = paste0("Day ", 
-                           substr(input$dataset, 5, nchar(input$dataset)),
-                           if(input$dataset == "Day_20") { " Prosensory" } else { " Hair" },
-                           " Cells: IWP2 vs CHIR"),
-            pCutoff = 10^(-input$logpval),
-            FCcutoff = input$log2FC,
-            pointSize = input$pointSize,
-            colCustom = color.key,
-            selectLab = if(input$drawLabels){genes.of.interest}else{"XYZ"},
-            legendPosition = "right",
-            labSize = input$labelSize,
-            colAlpha = input$pointAlpha,
-            drawConnectors = T,
-            arrowheads = F
-        )  + NoLegend() +
-            xlim(c(input$xlim*-1, input$xlim))  
-    }) %>% 
-        bindCache(input$log2FC, 
-                  input$logpval,
-                  input$pointSize,
-                  input$drawLabels,
-                  input$labelSize,
-                  input$pointAlpha,
-                  input$xlim,
-                  input$dataset,
-                  input$iwp2Highlight,
-                  input$chirHighlight,
-                  input$iwp2Col,
-                  input$chirCol)
+  reactiveVolcano <- reactive ({
+      vp.data <- datasets[[input$dataset]]
+      genes.of.interest <- gene.sets[[input$dataset]]
+      
+      color.key <- ifelse(
+          vp.data$log2FoldChange < input$log2FC*-1 & vp.data$padj < 10^(-input$logpval),
+          input$iwp2Col, 
+          ifelse(
+              vp.data$log2FoldChange > input$log2FC & vp.data$padj < 10^(-input$logpval),
+              input$chirCol,
+              "lightgrey"
+          )
+      )
+      
+      names(color.key) <- ifelse(vp.data$log2FoldChange < input$log2FC*-1 & vp.data$padj < 10^(-input$logpval),
+                                 "IWP2",
+                                 ifelse(
+                                     vp.data$log2FoldChange > input$log2FC & vp.data$padj < 10^(-input$logpval),
+                                     "CHIR",
+                                     "Below Threshold"  
+                                 )
+      )
+      
+      #Define color for highlighted genes
+      color.key[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r"))  &
+                        vp.data$log2FoldChange > 0)] <- input$chirHighlight
+      
+      color.key[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r"))  &
+                        vp.data$log2FoldChange < 0)] <- input$iwp2Highlight
+      
+      names(color.key)[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r")) &
+                             vp.data$log2FoldChange > 0)] <- "Dorsal Marker Genes"
+      
+      names(color.key)[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r")) &
+                               vp.data$log2FoldChange < 0)] <- "Ventral Marker Genes"
+      
+      
+      # construct the volcano plot
+      EnhancedVolcano(
+          toptable = vp.data,
+          lab = vp.data$gene,
+          x = "log2FoldChange",
+          y = "padj",
+          title = paste0("Day ", 
+                         substr(input$dataset, 5, nchar(input$dataset)),
+                         if(input$dataset == "Day_20") { " Prosensory" } else { " Hair" },
+                         " Cells: IWP2 vs CHIR"),
+          pCutoff = 10^(-input$logpval),
+          FCcutoff = input$log2FC,
+          pointSize = input$pointSize,
+          colCustom = color.key,
+          selectLab = if(input$drawLabels){genes.of.interest}else{"XYZ"},
+          legendPosition = "right",
+          labSize = input$labelSize,
+          colAlpha = input$pointAlpha,
+          drawConnectors = T,
+          arrowheads = F
+      )  + NoLegend() +
+          xlim(c(input$xlim*-1, input$xlim))  
+  }) %>% 
+      bindCache(input$log2FC, 
+                input$logpval,
+                input$pointSize,
+                input$drawLabels,
+                input$labelSize,
+                input$pointAlpha,
+                input$xlim,
+                input$dataset,
+                input$iwp2Highlight,
+                input$chirHighlight,
+                input$iwp2Col,
+                input$chirCol)
 
-    output$volcanoPlot <- renderPlot({
-        print(reactiveVolcano())
-    }) %>% 
-        bindCache(input$log2FC, 
-                  input$logpval,
-                  input$pointSize,
-                  input$drawLabels,
-                  input$labelSize,
-                  input$pointAlpha,
-                  input$xlim,
-                  input$dataset,
-                  input$iwp2Highlight,
-                  input$chirHighlight,
-                  input$iwp2Col,
-                  input$chirCol)
-    
-    output$VolcanoPlotImage <- downloadHandler(
-        filename = function() { paste(input$dataset, "_VolcanoPlot", '.png', sep='') },
-        content = function(file) {
-            ggsave(file,
-                   plot = reactiveVolcano(),
-                   device = "png",
-                   units = "in",
-                   width = as.numeric(input$downloadWidth),
-                   height = as.numeric(input$downloadHeight),
-                   dpi = 300
-            )
-        }
-    )
-    
-    output$VolcanoPlotEPS <- downloadHandler(
-        filename = function() { paste(input$dataset, "_VolcanoPlot", '.eps', sep='') },
-        content = function(file) {
-            ggsave(file,
-                   plot = reactiveVolcano(),
-                   device = "eps",
-                   units = "in",
-                   width = as.numeric(input$downloadWidth),
-                   height = as.numeric(input$downloadHeight),
-                   dpi = 300
-            )
-        }
-    )
+  output$volcanoPlot <- renderPlot({
+      reactiveVolcano()
+  }) %>% 
+      bindCache(input$log2FC, 
+                input$logpval,
+                input$pointSize,
+                input$drawLabels,
+                input$labelSize,
+                input$pointAlpha,
+                input$xlim,
+                input$dataset,
+                input$iwp2Highlight,
+                input$chirHighlight,
+                input$iwp2Col,
+                input$chirCol)
+  
+  output$clickTable <- renderDataTable(
+
+    nearPoints(
+      mutate(
+        datasets[[input$dataset]],
+        log10FC = -1*log10(padj)
+        ),
+      input$plot_click,
+      maxpoints = 1)
+  )
+  
+  output$click_info <- renderPrint({
+    cat("input$plot_click:\n")
+    str(input$plot_click)
+  })
+  
+  output$VolcanoPlotImage <- downloadHandler(
+      filename = function() { paste(input$dataset, "_VolcanoPlot", '.png', sep='') },
+      content = function(file) {
+          ggsave(file,
+                 plot = reactiveVolcano(),
+                 device = "png",
+                 units = "in",
+                 width = as.numeric(input$downloadWidth),
+                 height = as.numeric(input$downloadHeight),
+                 dpi = 300
+          )
+      }
+  )
+  
+  output$VolcanoPlotEPS <- downloadHandler(
+      filename = function() { paste(input$dataset, "_VolcanoPlot", '.eps', sep='') },
+      content = function(file) {
+          ggsave(file,
+                 plot = reactiveVolcano(),
+                 device = "eps",
+                 units = "in",
+                 width = as.numeric(input$downloadWidth),
+                 height = as.numeric(input$downloadHeight),
+                 dpi = 300
+          )
+      }
+  )
 }
 
 # Run the application 

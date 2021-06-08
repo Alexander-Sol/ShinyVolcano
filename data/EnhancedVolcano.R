@@ -201,7 +201,7 @@ EnhancedVolcano <- function(
   # 1, both colCustom and shapeCustom are activated
   if (!is.null(colCustom) & !is.null(shapeCustom)) {
 
-    plot <- ggplot(toptable, aes(x=xvals, y=-log10(yvals))) + th +
+    plot <- ggplot(toptable, aes(x=xvals, y=-log10(yvals), name = lab)) + th +
 
       # over-ride legend icon sizes for colour and shape.
       # guide_legends are separate for colour and shape;
@@ -232,7 +232,7 @@ EnhancedVolcano <- function(
   # 2, only colCustom is activated and 'shape' has just a single value
   } else if (!is.null(colCustom) & is.null(shapeCustom) & length(shape) == 1) {
 
-    plot <- ggplot(toptable, aes(x=xvals, y=-log10(yvals))) + th +
+    plot <- ggplot(toptable, aes(x=xvals, y=-log10(yvals), name = lab)) + th +
 
       # over-ride legend icon sizes for colour and shape.
       # guide_legends are separate for colour and shape;
@@ -268,7 +268,7 @@ EnhancedVolcano <- function(
   # 3, only colCustom is activated and 'shape' has 4 values
   } else if (!is.null(colCustom) & is.null(shapeCustom) & length(shape) == 4) {
 
-    plot <- ggplot(toptable, aes(x=xvals, y=-log10(yvals))) + th +
+    plot <- ggplot(toptable, aes(x=xvals, y=-log10(yvals), name = lab)) + th +
 
       # over-ride legend icon sizes for colour and shape.
       # guide_legends are separate for colour and shape;
@@ -319,7 +319,7 @@ EnhancedVolcano <- function(
 
     if (is.null(colGradient)) {
 
-      plot <- ggplot(toptable, aes(x = xvals, y = -log10(yvals))) + th +
+      plot <- ggplot(toptable, aes(x = xvals, y = -log10(yvals), name = lab)) + th +
 
         # over-ride legend icon sizes for colour and shape.
         # guide_legends are separate for colour and shape;
@@ -366,7 +366,7 @@ EnhancedVolcano <- function(
 
     } else {
 
-      plot <- ggplot(toptable, aes(x = xvals, y = -log10(yvals))) + th +
+      plot <- ggplot(toptable, aes(x = xvals, y = -log10(yvals), name = lab)) + th +
 
         # over-ride legend icon sizes for colour and shape.
         # guide_legends are separate for colour and shape;
@@ -406,7 +406,7 @@ EnhancedVolcano <- function(
 
     if (is.null(colGradient)) {
 
-      plot <- ggplot(toptable, aes(x = xvals, y = -log10(yvals))) + th +
+      plot <- ggplot(toptable, aes(x = xvals, y = -log10(yvals), name = lab)) + th +
 
         # over-ride legend icon sizes for colour and shape.
         # including 'shape' in the colour guide_legend here
@@ -439,7 +439,7 @@ EnhancedVolcano <- function(
 
     } else {
 
-      plot <- ggplot(toptable, aes(x = xvals, y = -log10(yvals))) + th +
+      plot <- ggplot(toptable, aes(x = xvals, y = -log10(yvals), name = lab)) + th +
 
         geom_point(
           aes(color = yvals),
@@ -508,7 +508,7 @@ EnhancedVolcano <- function(
 
     } else {
 
-      plot <- ggplot(toptable, aes(x = xvals, y = -log10(yvals))) + th +
+      plot <- ggplot(toptable, aes(x = xvals, y = -log10(yvals), name = lab)) + th +
 
         geom_point(
           aes(
