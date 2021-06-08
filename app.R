@@ -22,12 +22,15 @@ CHIR <- "#55A0FB"
 
 datasets <- list(
     Day_20 = readRDS("data/day20deseq.rds"),
+    Day_80 = readRDS("data/day80deseq.rds"),
     Day_109 = readRDS("data/day109deseq.rds")
 )
 
 gene.sets <- list(
     Day_20 = c("NR2F2", "RSPO3", "EDN3", "LRP2", "SULF1", "GAS1", "PTCH1", "OTX1", "KDM7A",
       "TAGLN", "CXCR4", "JAG1", "DLX5", "GPR155", "ACSL4", "MSX1"),
+    Day_80 = c("NR2F1", "GATA3", "INSM1", "ZNF503", "FGF8", "GNG8", "LFNG", "FGFR3", "LGR5", "RPRM",
+               "CD164L2", "ZBBX", "TEKT1", "SKOR1", "AMPD3", "VEPH1"),
     Day_109 = c("GATA3", "NR2F1", "INSM1", "HES6", "TMPRSS3", "GNG8", "ZNF503",
                  "TEKT1", "NEUROD6", "ZBBX", "CD164L2", "PCDH20", "SKOR1", "VEPH1", "TEKT2", "TCTEX1D1")
 )
@@ -61,6 +64,7 @@ ui <- fluidPage(
           
           selectInput("dataset", "Dataset",
                       c("Day 20 Prosensory" = "Day_20",
+                        "Day 80 Hair Cells" = "Day_80",
                         "Day 109 Hair Cells" = "Day_109"),
                       width = '200px'
           ),
