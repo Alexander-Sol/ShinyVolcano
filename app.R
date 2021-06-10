@@ -55,9 +55,9 @@ ui <- fluidPage(
     # Application title
     titlePanel("Volcano Plot Customization"),
     
-    actionButton("plotCustomize", "Show/Hide Plot Options"),
+    actionButton("plotCustomize", "Show/Hide Plot Options"), #actionButtons iterate by 1 whenever they're clicked
     
-    actionButton("colorCustomize", "Show/Hide Color Options"),
+    actionButton("colorCustomize", "Show/Hide Color Options"), #actionButtons iterate by 1 whenever they're clicked
 
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
@@ -157,7 +157,10 @@ ui <- fluidPage(
           textInputRow(inputId="downloadHeight", label="Download Height (in)", value = 6.0),
           br(),
           downloadButton("VolcanoPlotImage", "Download Plot as .png"),
-          downloadButton("VolcanoPlotEPS", "Download Plot as .eps file")
+          downloadButton("VolcanoPlotEPS", "Download Plot as .eps file"),
+          br(),
+          
+          
         ),
       
         # Show a plot of the generated distribution
@@ -172,11 +175,11 @@ ui <- fluidPage(
 server <- function(input, output) {
   
   output$showPlotControls <- reactive({
-    input$plotCustomize%%2 # Add whatever condition you want here. Must return TRUE or FALSE
+    input$plotCustomize %% 2 # Add whatever condition you want here. Must return TRUE or FALSE
   })
   
   output$showColorControls <- reactive({
-    input$colorCustomize%%2 # Add whatever condition you want here. Must return TRUE or FALSE
+    input$colorCustomize %% 2 # Add whatever condition you want here. Must return TRUE or FALSE
   })
   
   outputOptions(output, 'showPlotControls', suspendWhenHidden = FALSE)

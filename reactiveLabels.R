@@ -3,33 +3,35 @@ library(ggplot2)
 library(dplyr)
 library(purrr)
 
-#--- Define inputs ----
-input <- list()
-input$dataset <- datasets$Day_80
-input$logpval <- 25
-input$log2FC <- 1
-input$IWP2col <- "#B856D7"
-input$CHIRcol <- "#55A0FB"
 
-reactiveGS <- c("NR2F1", "GATA3", "INSM1", "ZNF503", "FGF8", "GNG8", "LFNG", "FGFR3", "LGR5", "RPRM",
+
+#--- Define temputs ----
+temput <- list()
+temput$dataset <- readRDS("data/day80deseq_verbose.rds")
+temput$logpval <- 25
+temput$log2FC <- 1
+temput$IWP2col <- "#B856D7"
+temput$CHIRcol <- "#55A0FB"
+
+defaultGS <- c("NR2F1", "GATA3", "INSM1", "ZNF503", "FGF8", "GNG8", "LFNG", "FGFR3", "LGR5", "RPRM",
                          "CD164L2", "ZBBX", "TEKT1", "SKOR1", "AMPD3", "VEPH1")
 
 #---- create table ----
 
 toptable <- data.frame(
-  Log2FC = input$dataset$log2FoldChange,
-  Log10P = ifelse(input$dataset$padj == 0, .Machine$double.xmin, input$dataset$padj) %>% 
+  Gene = temput$dataset$gene,
+  Log2FC = temput$dataset$log2FoldChange,
+  Log10P = ifelse(temput$dataset$padj == 0, .Machine$double.xmin, temput$dataset$padj) %>% 
     log10() %>% 
-    "*"(-1),
-  Gene = input$dataset$gene
+    "*"(-1)
 )
 
 #Names the categories/colors
 toptable$Category <- ifelse(
-  toptable$Log2FC < input$log2FC*-1 & toptable$Log10P > input$logpval,
+  toptable$Log2FC < temput$log2FC*-1 & toptable$Log10P > temput$logpval,
   "IWP2",
   ifelse(
-    toptable$Log2FC > input$log2FC & toptable$Log10P > input$logpval,
+    toptable$Log2FC > temput$log2FC & toptable$Log10P > temput$logpval,
     "CHIR",
     "Below Threshold"  
   )
@@ -40,19 +42,18 @@ toptable$Category <- ifelse(
 #Probably colors should be reactive. something like
 colorMap <- reactive({
   list(
-    IWP2 = input$IWP2col,
-    CHIR = input$CHIRcol,
+    IWP2 = temput$IWP2col,
+    CHIR = temput$CHIRcol,
     `Below Threshold` = 'lightgrey'
   )
 })
 colorMap <- list(
-                 IWP2 = input$IWP2col,
-                 CHIR = input$CHIRcol,
-                 `Below Threshold` = 'lightgrey',
-                 textCol = "black"
-                )
+  IWP2 = temput$IWP2col,
+  CHIR = temput$CHIRcol,
+  `Below Threshold` = 'lightgrey',
+  textCol = "black"
+)
 
-# TODO: make genes reactive
 
 #---- Stolen from EnhancedVolcano -----
 
@@ -111,29 +112,84 @@ th <- theme_bw(base_size = 24) +
 
 
 
-#---- Plot ----  
-plot <- ggplot(toptable, aes(x=Log2FC, y=Log10P, label = Gene, color = Category)) + th + 
-  geom_point(
-    size = 2, #Change to input var
-    alpha = 0.5,
-    shape = 19
-   ) +
-  scale_color_manual(values = colorMap) +
-  geom_text(data = subset(toptable, Gene %in% reactiveGS),
-            aes(Log2FC, Log10P, label = Gene, color = "textCol"))
+#---- App Starts Here ----
 
 
 
-# over-ride legend icon sizes for colour and shape.
-# guide_legends are separate for colour and shape;
-# so, legends will be drawn separate IF shape is also
-# included as aes to geom_point (it is not, here)
-guides(
-  colour = guide_legend(
-    order = 1,
-    override.aes = list(
-      size = legendIconSize)),
-  shape = guide_legend(
-    order = 2,
-    override.aes = list(
-      size = legendIconSize))) +
+ui <- fluidPage(
+  
+  sidebarLayout(
+    
+    sidebarPanel(
+      dataTableOutput("geneTable")
+      
+    ),
+    
+    mainPanel(
+      
+      plotOutput("volcanoPlot", height = "600px",
+                 click = "plot_click",
+                 hover = "plot_hover"),
+      
+      textOutput("hover_info")
+    )
+  )
+)
+
+server <- function(input, output) {
+  values <- reactiveValues()
+  
+  values$GT <- data.frame(
+    subset(toptable, Gene %in% reactiveGS)
+    )
+  
+  observeEvent(input$plot_click, {
+    new_row <- nearPoints(toptable, 
+                          input$plot_click,
+                          xvar = "Log2FC",
+                          yvar = "Log10P",
+                          maxpoints = 1)
+    
+    values$GT <- rbind(values$GT, new_row)
+  })
+  
+  # output$click_info <- renderPrint({
+  
+  output$hover_info <- renderText({
+    gene.name <- nearPoints(toptable, input$plot_hover,
+                   xvar = "Log2FC",
+                   yvar = "Log10P",
+                   maxpoints = 1)[[1]]
+    if(length(gene.name) > 0) {
+      return(paste("GENE:",as.character(gene.name)))
+    } else {
+      return("GENE: ")
+    }
+    # cat("input$plot_click:\n")
+    # str(input$plot_click)
+  })
+  
+  output$volcanoPlot <- renderPlot({
+    ggplot(toptable, aes(x=Log2FC, y=Log10P, label = Gene, color = Category)) + th + 
+      geom_point(
+        size = 2, #Change to temput var
+        alpha = 0.5,
+        shape = 19
+      ) +
+      scale_color_manual(values = colorMap) +
+      geom_text(data = subset(toptable, Gene %in% values$GT$Gene),
+                aes(Log2FC, Log10P, label = Gene, color = "textCol"))
+  })
+  
+  output$geneTable <- renderDataTable({
+    data.frame(Gene = values$GT$Gene,
+               Log2FC = values$GT$Log2FC %>% round(2),
+               Log10P = values$GT$Log10P %>% round(0),
+               Condition = values$GT$Category)
+  })
+  
+}
+
+shinyApp(ui = ui, server = server)
+
+
