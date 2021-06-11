@@ -151,6 +151,7 @@ server <- function(input, output) {
                           maxpoints = 1)
     
     values$GT <- rbind(values$GT, new_row)
+    values$GT <- values$GT[!( duplicated(values$GT) | duplicated(values$GT, fromLast = T) ), ] #Removing all instances of duplicate rows disables labels on second click
   })
   
   # output$click_info <- renderPrint({
@@ -172,13 +173,21 @@ server <- function(input, output) {
   output$volcanoPlot <- renderPlot({
     ggplot(toptable, aes(x=Log2FC, y=Log10P, label = Gene, color = Category)) + th + 
       geom_point(
-        size = 2, #Change to temput var
+        size = 6, #Change to temput var
         alpha = 0.5,
         shape = 19
       ) +
       scale_color_manual(values = colorMap) +
-      geom_text(data = subset(toptable, Gene %in% values$GT$Gene),
-                aes(Log2FC, Log10P, label = Gene, color = "textCol"))
+      geom_text_repel(
+                data = subset(toptable, Gene %in% values$GT$Gene),
+                aes(Log2FC, Log10P, label = Gene, color = "textCol"),
+                max.overlaps = 250,
+                min.segment.length = 0.2,
+                force_pull = 0.01,
+                segment.colour = "black",
+                segment.size = 1,
+                size = 8
+      )
   })
   
   output$geneTable <- renderDataTable({
