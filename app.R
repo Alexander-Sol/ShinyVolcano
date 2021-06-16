@@ -8,18 +8,12 @@
 #
 
 library(shiny)
-source("data/EnhancedVolcano.R")
+source("bespokeVolcano_v1.R")
 library(tidyverse)
 library(ggplot2)
 library(ggrepel)
-library(ggalt)
-library(ggrastr)
 library(shinyWidgets)
 library(colourpicker)
-library(plotly)
-
-IWP2 <- "#B856D7"
-CHIR <- "#55A0FB"
 
 datasets <- list(
     Day_20 = readRDS("data/day20deseq_verbose.rds"),
@@ -36,11 +30,53 @@ gene.sets <- list(
                  "TEKT1", "NEUROD6", "ZBBX", "CD164L2", "PCDH20", "SKOR1", "VEPH1", "TEKT2", "TCTEX1D1")
 )
 
+# Server Side Functions ----
+update.toptable <- function(gene, toptable, geneTable) {
+  if(length(gene) == 0) { 
+    return(toptable) 
+  } else if(gene %in% geneTable$Gene) {
+    toptable <- toptable[!toptable$Gene == paste0(gene, ".r"), ]
+    toptable$Category[toptable$Gene == gene] <- toptable$Category[toptable$Gene == gene] %>%
+      sanitizeCategory() # LMAO good thing IWP2 and CHIR are the same number of characters otherwise this wouldnt work
+  } else {
+    new_row <- toptable[toptable$Gene %in% gene, ]
+    new_row$Gene <- paste0(new_row$Gene, ".r")
+    toptable <- rbind(toptable, new_row)
+    if(toptable$Category[which(toptable$Gene == gene)] != "Below Threshold") {
+      toptable$Category[which(toptable$Gene %in% c(gene, paste0(gene, ".r") ))] <- paste0(toptable$Category[toptable$Gene %in% gene], "highlight")
+    }
+  }
+  return(toptable)
+}
+
+update.genetable <- function(gene, toptable, geneTable) {
+  if(length(gene) == 0) { 
+    return(geneTable) 
+  } else if(gene %in% geneTable$Gene) {
+    geneTable <- geneTable[!geneTable$Gene == gene, ]
+  } else {
+    new_row <- toptable[toptable$Gene %in% gene, ]
+    new_row$Category <- sanitizeCategory(new_row$Category)
+    geneTable <- rbind(geneTable, new_row) 
+  }
+}
+
+sanitizeCategory <- function(category) {
+  if(length(grep("highlight", category)) > 0) {
+    category[grep("highlight", category)] <- substring(category[grep("highlight", category)], 1, 4)
+    return( category )
+  } else {
+    return(category)
+  }
+}
+
 textInputRow<-function (inputId, label, value = ""){
   div(style="display:inline-block; width:150px; padding-bottom:10px; padding-right:50px",
       tags$label(label, `for` = inputId), 
       tags$input(id = inputId, type = "text", value = value, class="input-small"))
-}             
+} 
+
+#----
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -51,13 +87,23 @@ ui <- fluidPage(
                ".shiny-output-error { visibility: hidden; }",
                ".shiny-output-error:before { visibility: hidden; }"
     ),
+    tags$head(tags$style(
+      "#hover_info{color: black;
+              font-size: 20px;
+              font-style: bold;
+              }"
+    )),
 
     # Application title
     titlePanel("Volcano Plot Customization"),
     
-    actionButton("plotCustomize", "Show/Hide Plot Options"), #actionButtons iterate by 1 whenever they're clicked
+    actionButton("geneCustomize", "Gene Table"), #actionButtons iterate by 1 whenever they're clicked
     
-    actionButton("colorCustomize", "Show/Hide Color Options"), #actionButtons iterate by 1 whenever they're clicked
+    actionButton("plotCustomize", "Plot Options"), #actionButtons iterate by 1 whenever they're clicked
+    
+    actionButton("colorCustomize", "Color Options"), #actionButtons iterate by 1 whenever they're clicked
+    
+    actionButton("downloadCustomize", "Download Options"), #actionButtons iterate by 1 whenever they're clicked
 
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
@@ -70,7 +116,19 @@ ui <- fluidPage(
                       width = '200px'
           ),
           
-          conditionalPanel(
+          conditionalPanel( # Gene Table Controls
+            #-----------
+            condition = "output.showGeneFinder",
+            dataTableOutput("geneTable"),
+            br(),
+            selectizeInput("updateGene",
+                           "Search Genes",
+                           choices = NULL),
+            actionButton("addGene",
+                         "Add/Remove Gene Label")
+          ), #----
+          
+          conditionalPanel( # Plot Controls
             #-----------
             condition = "output.showPlotControls",
             
@@ -91,7 +149,7 @@ ui <- fluidPage(
                         "Point Size",
                         min = 0.5,
                         max = 12,
-                        value = 4,
+                        value = 5,
                         step = 0.25),
             
             sliderInput("pointAlpha",
@@ -120,53 +178,55 @@ ui <- fluidPage(
             prettySwitch("drawLabels",
                          "Labels",
                           value = TRUE,
-                         width = "125px")
-            
-            
-          ),
-          #----
+                          width = "125px")
+              
+          ), #----
           
-          conditionalPanel(
+          conditionalPanel( # Color Controls
             #----
             condition = "output.showColorControls",
             fluidRow(
               column(3,
                      helpText("CHIR"),
-                     colourInput("chirCol", NULL, "#55A0FB"),
+                     colourInput("CHIRcol", NULL, "#55A0FB"),
                      br(),
                      helpText("CHIR Highlight"),
-                     colourInput("chirHighlight", NULL, "#333194")
+                     colourInput("CHIRhighlight", NULL, "#333194")
               ),
               column(3,
                      helpText("IWP2"),
-                     colourInput("iwp2Col", NULL, "#B856D7"),
+                     colourInput("IWP2col", NULL, "#B856D7"),
                      br(),
                      helpText("IWP2 Highlight"),
-                     colourInput("iwp2Highlight", NULL, "#8b0000")
+                     colourInput("IWP2highlight", NULL, "#8b0000")
               ),
-            ) #----
-          ),
+            ) 
+          ), #----
           
-          column(width = 6,
-                 verbatimTextOutput("clickTable")
-          ),
-          br(),
-            
-          #Managing plot downloads
-          textInputRow(inputId="downloadWidth", label="Download Width (in)", value = 8.0),
-          textInputRow(inputId="downloadHeight", label="Download Height (in)", value = 6.0),
-          br(),
-          downloadButton("VolcanoPlotImage", "Download Plot as .png"),
-          downloadButton("VolcanoPlotEPS", "Download Plot as .eps file"),
-          br(),
-          
-          
+          conditionalPanel( # Download Controls
+            #----
+            condition = "output.showDownloadControls",
+            textInputRow(inputId="downloadWidth", label="Download Width (in)", value = 8.0),
+            textInputRow(inputId="downloadHeight", label="Download Height (in)", value = 6.0),
+            br(),
+            downloadButton("VolcanoPlotImage", "Download Plot as .png"),
+            downloadButton("VolcanoPlotEPS", "Download Plot as .eps file"),
+            br(),
+          ), #----
         ),
       
         # Show a plot of the generated distribution
         mainPanel(
            plotOutput("volcanoPlot", height = "600px",
-                      click = "plot_click")
+                      click = "plot_click",
+                      hover = "plot_hover"),
+           br(),
+           textOutput("hover_info"),
+           br(),
+           helpText("Hover over a data point to show the gene name (above)"),
+           helpText("Click a data point to highlight it on the plot"),
+           helpText("Searching for genes (under the Gene Table tab) to highlight its position on the plot")
+           # verbatimTextOutput("debug")
         )
     )
 )
@@ -174,123 +234,222 @@ ui <- fluidPage(
 # Define server logic required to draw a histogram
 server <- function(input, output) {
   
-  output$showPlotControls <- reactive({
-    input$plotCustomize %% 2 # Add whatever condition you want here. Must return TRUE or FALSE
-  })
+  #---- Define Reactive Values ----
   
-  output$showColorControls <- reactive({
-    input$colorCustomize %% 2 # Add whatever condition you want here. Must return TRUE or FALSE
-  })
-  
-  outputOptions(output, 'showPlotControls', suspendWhenHidden = FALSE)
-  
-  outputOptions(output, "showColorControls", suspendWhenHidden = FALSE)
+  toptable <- reactive({
+    #---- create table ----
     
-  reactiveVolcano <- reactive ({
-      vp.data <- datasets[[input$dataset]]
-      genes.of.interest <- gene.sets[[input$dataset]]
-      
-      color.key <- ifelse(
-          vp.data$log2FoldChange < input$log2FC*-1 & vp.data$padj < 10^(-input$logpval),
-          input$iwp2Col, 
-          ifelse(
-              vp.data$log2FoldChange > input$log2FC & vp.data$padj < 10^(-input$logpval),
-              input$chirCol,
-              "lightgrey"
-          )
+    toptable <- data.frame(
+      Gene = datasets[[input$dataset]]$gene,
+      Log2FC = datasets[[input$dataset]]$log2FoldChange,
+      Log10P = ifelse(datasets[[input$dataset]]$padj == 0, .Machine$double.xmin, datasets[[input$dataset]]$padj) %>% 
+        log10() %>% 
+        "*"(-1)
+    )
+    
+    #Names the categories/colors
+    toptable$Category <- ifelse(
+      toptable$Log2FC < input$log2FC*-1 & toptable$Log10P > input$logpval,
+      "IWP2",
+      ifelse(
+        toptable$Log2FC > input$log2FC & toptable$Log10P > input$logpval,
+        "CHIR",
+        "Below Threshold"  
       )
-      
-      names(color.key) <- ifelse(vp.data$log2FoldChange < input$log2FC*-1 & vp.data$padj < 10^(-input$logpval),
-                                 "IWP2",
-                                 ifelse(
-                                     vp.data$log2FoldChange > input$log2FC & vp.data$padj < 10^(-input$logpval),
-                                     "CHIR",
-                                     "Below Threshold"  
-                                 )
+    ) 
+    
+    toptable$Category <- ifelse(
+      toptable$Category == "IWP2" & toptable$Gene %in% c(gene.sets[[input$dataset]],
+                                                         paste0(gene.sets[[input$dataset]], ".r")),
+      "IWP2highlight",
+      ifelse(
+        toptable$Category == "CHIR" & toptable$Gene %in% c(gene.sets[[input$dataset]],
+                                                           paste0(gene.sets[[input$dataset]], ".r")),
+        "CHIRhighlight",
+        toptable$Category
       )
-      
-      #Define color for highlighted genes
-      color.key[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r"))  &
-                        vp.data$log2FoldChange > 0)] <- input$chirHighlight
-      
-      color.key[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r"))  &
-                        vp.data$log2FoldChange < 0)] <- input$iwp2Highlight
-      
-      names(color.key)[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r")) &
-                             vp.data$log2FoldChange > 0)] <- "Dorsal Marker Genes"
-      
-      names(color.key)[which(vp.data$gene %in% c(genes.of.interest, paste0(genes.of.interest, ".r")) &
-                               vp.data$log2FoldChange < 0)] <- "Ventral Marker Genes"
-      
-      
-      # construct the volcano plot
-      EnhancedVolcano(
-          toptable = vp.data,
-          lab = vp.data$gene,
-          x = "log2FoldChange",
-          y = "padj",
-          title = paste0("Day ", 
-                         substr(input$dataset, 5, nchar(input$dataset)),
-                         if(input$dataset == "Day_20") { " Prosensory" } else { " Hair" },
-                         " Cells: IWP2 vs CHIR"),
-          pCutoff = 10^(-input$logpval),
-          FCcutoff = input$log2FC,
-          pointSize = input$pointSize,
-          colCustom = color.key,
-          selectLab = if(input$drawLabels){genes.of.interest}else{"XYZ"},
-          legendPosition = "right",
-          labSize = input$labelSize,
-          colAlpha = input$pointAlpha,
-          drawConnectors = T,
-          arrowheads = F
-      )  + NoLegend() +
-          xlim(c(input$xlim*-1, input$xlim))  
-  }) %>% 
-      bindCache(input$log2FC, 
-                input$logpval,
-                input$pointSize,
-                input$drawLabels,
-                input$labelSize,
-                input$pointAlpha,
-                input$xlim,
-                input$dataset,
-                input$iwp2Highlight,
-                input$chirHighlight,
-                input$iwp2Col,
-                input$chirCol)
-
-  output$volcanoPlot <- renderPlot({
-      reactiveVolcano()
-  }) %>% 
-      bindCache(input$log2FC, 
-                input$logpval,
-                input$pointSize,
-                input$drawLabels,
-                input$labelSize,
-                input$pointAlpha,
-                input$xlim,
-                input$dataset,
-                input$iwp2Highlight,
-                input$chirHighlight,
-                input$iwp2Col,
-                input$chirCol)
+    )
+    
+    toptable <- toptable[ , c(1,4,2,3)]
+    return(toptable)
+    
+  })
   
-  output$clickTable <- renderDataTable(
+  geneTable <- reactive({
+    subset(toptable(), Gene %in% gene.sets[[input$dataset]]) %>%
+      mutate(Category = sanitizeCategory(Category))
+  })
+  
+  colorMap <- reactive({
+    list(
+      IWP2 = input$IWP2col,
+      CHIR = input$CHIRcol,
+      IWP2highlight = input$IWP2highlight,
+      CHIRhighlight = input$CHIRhighlight,
+      `Below Threshold` = 'lightgrey',
+      textCol = "black"
+    )
+  })
+  
+  values <- reactiveValues()
+  values$toptable <- data.frame()
+  values$geneTable <- data.frame()
+  values$conditional <- "gene"
+  
+  # Stashing these tables as values (vs reactive expressions) allows for update on click
+  observe ({
+    values$toptable <- toptable()
+    values$geneTable <- geneTable()
+  })
 
-    nearPoints(
-      mutate(
-        datasets[[input$dataset]],
-        log10FC = -1*log10(padj)
-        ),
-      input$plot_click,
-      maxpoints = 1)
+  #---- Conditional Panel Control ----
+
+  output$showGeneFinder <- reactive({
+    values$conditional == "gene"
+    # (input$geneCustomize+1) %% 2 # Add whatever condition you want here. Must return TRUE or FALSE
+  })
+
+  output$showPlotControls <- reactive({
+    values$conditional == "plot" # Add whatever condition you want here. Must return TRUE or FALSE
+  })
+
+  output$showColorControls <- reactive({
+    values$conditional == "color" # Add whatever condition you want here. Must return TRUE or FALSE
+  })
+
+  output$showDownloadControls <- reactive({
+    values$conditional == "download" # Add whatever condition you want here. Must return TRUE or FALSE
+  })
+  
+  observeEvent(
+    input$geneCustomize, {
+    values$conditional <- "gene" }
   )
   
-  output$click_info <- renderPrint({
-    cat("input$plot_click:\n")
-    str(input$plot_click)
+  observeEvent(
+    input$plotCustomize, {
+      values$conditional <- "plot" }
+  )
+  
+  observeEvent(
+    input$colorCustomize, {
+      values$conditional <- "color" }
+  )  
+  
+  observeEvent(
+    input$downloadCustomize, {
+      values$conditional <- "download" }
+  )
+
+  outputOptions(output, "showGeneFinder", suspendWhenHidden = FALSE)
+
+  outputOptions(output, 'showPlotControls', suspendWhenHidden = FALSE)
+
+  outputOptions(output, "showColorControls", suspendWhenHidden = FALSE)
+
+  outputOptions(output, "showDownloadControls", suspendWhenHidden = FALSE) # lmao idk what suspend when hidden even doessssss
+
+  #---- Gene Updating ----
+  #Updates DataTable - GT based on plot click input
+  observeEvent(input$plot_click, {
+    click_gene <- nearPoints(toptable(),
+                             input$plot_click,
+                             xvar = "Log2FC",
+                             yvar = "Log10P",
+                             maxpoints = 1)$Gene
+    values$toptable <- update.toptable(click_gene, values$toptable, values$geneTable) #Be sure to update toptable values first
+    values$geneTable <- update.genetable(click_gene, values$toptable, values$geneTable)
+  })
+
+  # Updates DataTable - GT based on selectizeInput + addGene combination
+  observeEvent(input$addGene, {
+    values$toptable <- update.toptable(input$updateGene, values$toptable, values$geneTable)
+    values$geneTable <- update.genetable(input$updateGene, values$toptable, values$geneTable)
+  })
+
+  # Populates selectize input with all genes in toptable, except those that were duplicated
+  # For aesthetic purposes (".r$")
+  observe({
+    updateSelectizeInput(
+      inputId = "updateGene",
+      choices = toptable()$Gene[!str_detect(toptable()$Gene, ".r$")],
+      selected = "",
+      server = T
+    )
+  })
+
+  #---- Output ----
+  
+  output$geneTable <- renderDataTable({
+    data.frame(
+      Gene = geneTable()$Gene,
+      Condition = geneTable()$Category,
+      Log2FC = geneTable()$Log2FC %>% round(2),
+      Log10P = geneTable()$Log10P %>% round(0)
+    )
+  },
+    options = list(# Javascript Options
+      pageLength = 10,
+      aoColumnDefs=list(
+        list(
+          sClass = "alignRight",
+          aTargets = c(list(2), list(3))
+        )
+      )
+    )
+  )
+  
+  # Display the gene of plot point underneath mouse
+  output$hover_info <- renderText({
+    gene.name <- nearPoints(toptable(), input$plot_hover,
+                            xvar = "Log2FC",
+                            yvar = "Log10P",
+                            maxpoints = 1)[[1]]
+    if(length(gene.name) > 0) {
+      return(paste("GENE:", as.character(gene.name)))
+    } else {
+      return("GENE: ")
+    }
   })
   
+ 
+  reactiveVolcano <- reactive ({
+    bespokeVolcano(
+      toptable = values$toptable,
+      geneTable = values$geneTable,
+      title = paste0(
+        "Day ",
+        substr(input$dataset, 5, nchar(input$dataset)),
+        if( input$dataset == "Day_20" ) { " Prosensory" } else {" Hair" },
+        " Cells: IWP2 vs CHIR"
+        ),
+      pCutoff = input$logpval,
+      FCcutoff = input$log2FC,
+      pointSize = input$pointSize,
+      colAlpha = input$pointAlpha,
+      xlim = input$xlim,
+      labSize = input$labelSize,
+      drawLabel = input$drawLabels,
+      colorMap = colorMap()
+    )
+  }) # %>%
+  # #     bindCache(input$log2FC, 
+  # #               input$logpval,
+  # #               input$pointSize,
+  # #               input$drawLabels,
+  # #               input$labelSize,
+  # #               input$pointAlpha,
+  # #               input$xlim,
+  # #               input$dataset,
+  # #               input$IWP2highlight,
+  # #               input$CHIRHighlight,
+  # #               input$IWP2Col,
+  # #               input$CHIRCol)
+  
+  output$volcanoPlot <- renderPlot({
+      reactiveVolcano()
+  })
+
   output$VolcanoPlotImage <- downloadHandler(
       filename = function() { paste(input$dataset, "_VolcanoPlot", '.png', sep='') },
       content = function(file) {
@@ -304,7 +463,7 @@ server <- function(input, output) {
           )
       }
   )
-  
+
   output$VolcanoPlotEPS <- downloadHandler(
       filename = function() { paste(input$dataset, "_VolcanoPlot", '.eps', sep='') },
       content = function(file) {
@@ -318,6 +477,12 @@ server <- function(input, output) {
           )
       }
   )
+  
+  # output$debug <- renderText({
+  #   values$conditional
+  # })
+  
+  
 }
 
 # Run the application 
