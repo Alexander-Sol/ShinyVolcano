@@ -61,6 +61,12 @@ update.genetable <- function(gene, toptable, geneTable) {
   }
 }
 
+makeGeneTable <- function(toptable, geneList) {
+  subset(toptable, Gene %in% geneList) %>%
+    mutate(Category = sanitizeCategory(Category))
+}
+
+
 sanitizeCategory <- function(category) {
   if(length(grep("highlight", category)) > 0) {
     category[grep("highlight", category)] <- substring(category[grep("highlight", category)], 1, 4)
@@ -78,7 +84,7 @@ textInputRow<-function (inputId, label, value = ""){
 
 #----
 
-# Define UI for application that draws a histogram
+# ----Define UI ----
 ui <- fluidPage(
     
     #Suppress warnings
@@ -225,11 +231,12 @@ ui <- fluidPage(
            br(),
            helpText("Hover over a data point to show the gene name (above)"),
            helpText("Click a data point to highlight it on the plot"),
-           helpText("Searching for genes (under the Gene Table tab) to highlight its position on the plot")
+           helpText("Search for a gene (under the Gene Table tab) to highlight its position on the plot")
            # verbatimTextOutput("debug")
         )
     )
 )
+
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
@@ -273,11 +280,16 @@ server <- function(input, output) {
     toptable <- toptable[ , c(1,4,2,3)]
     return(toptable)
     
-  })
+  })   # As it stands, labels get wiped out every time logFC/ pCutoff gets adjusted.
+  # This can probably be fixed by moving from gene.sets[[input$dataset]] to a reactiveGeneSet that get's refreshed every time the dataset changes
   
   geneTable <- reactive({
     subset(toptable(), Gene %in% gene.sets[[input$dataset]]) %>%
       mutate(Category = sanitizeCategory(Category))
+  })
+  
+  geneList <- reactive({
+    gene.sets[[input$dataset]]
   })
   
   colorMap <- reactive({
@@ -294,12 +306,14 @@ server <- function(input, output) {
   values <- reactiveValues()
   values$toptable <- data.frame()
   values$geneTable <- data.frame()
+  values$geneList <- character()
   values$conditional <- "gene"
   
   # Stashing these tables as values (vs reactive expressions) allows for update on click
   observe ({
     values$toptable <- toptable()
     values$geneTable <- geneTable()
+    values$geneList <- geneList()
   })
 
   #---- Conditional Panel Control ----
@@ -359,12 +373,14 @@ server <- function(input, output) {
                              maxpoints = 1)$Gene
     values$toptable <- update.toptable(click_gene, values$toptable, values$geneTable) #Be sure to update toptable values first
     values$geneTable <- update.genetable(click_gene, values$toptable, values$geneTable)
+    values$geneList <- c(values$geneList, click_gene)
   })
 
   # Updates DataTable - GT based on selectizeInput + addGene combination
   observeEvent(input$addGene, {
     values$toptable <- update.toptable(input$updateGene, values$toptable, values$geneTable)
     values$geneTable <- update.genetable(input$updateGene, values$toptable, values$geneTable)
+    values$geneList <- c(values$geneList, click_gene)
   })
 
   # Populates selectize input with all genes in toptable, except those that were duplicated
@@ -381,11 +397,12 @@ server <- function(input, output) {
   #---- Output ----
   
   output$geneTable <- renderDataTable({
+    geneTable <- makeGeneTable(values$toptable, values$geneList)
     data.frame(
-      Gene = geneTable()$Gene,
-      Condition = geneTable()$Category,
-      Log2FC = geneTable()$Log2FC %>% round(2),
-      Log10P = geneTable()$Log10P %>% round(0)
+      Gene = values$geneTable$Gene,
+      Condition = values$geneTable$Category,
+      Log2FC = values$geneTable$Log2FC %>% round(2),
+      Log10P = values$geneTable$Log10P %>% round(0)
     )
   },
     options = list(# Javascript Options
@@ -415,7 +432,8 @@ server <- function(input, output) {
  
   reactiveVolcano <- reactive ({
     bespokeVolcano(
-      toptable = values$toptable,
+      toptable = values$toptable %>%
+        arrange(Category),
       geneTable = values$geneTable,
       title = paste0(
         "Day ",
