@@ -31,6 +31,19 @@ gene.sets <- list(
 )
 
 # Server Side Functions ----
+
+# Ensures that selected genes (and only selected genes) are duplicated in toptable
+# This allows highlighted genes to be plotted twice, ensuring they aren't buried
+update.toptable <- function(geneList, toptable) {
+  gene.reps <- toptable[grep("\\.r$", toptable$Gene), ]
+  gene.reps$Gene <- sapply(gene.reps$Gene, FUN = function(x) substr(x, 1, nchar(x)-2))
+  gene.reps <- gene.reps[gene.reps$Gene %in% geneList, ]
+  gene.reps <- rbind(gene.reps, toptable[toptable$Gene %in% geneList[!geneList %in% gene.reps$Gene], ])
+  gene.reps$Gene <- paste0(gene.reps$Gene, ".r")
+  toptable <- rbind(toptable[-1*grep("\\.r$", toptable$Gene),], gene.reps)
+  return(toptable)
+}
+
 categorize.toptable <- function(toptable, geneList, log2FC, log10P) {
   toptable$Category <- ifelse(
     toptable$Log2FC < log2FC*-1 & toptable$Log10P > log10P,
@@ -59,28 +72,11 @@ categorize.toptable <- function(toptable, geneList, log2FC, log10P) {
   return(toptable)
 }
 
-# Ensures that selected genes (and only selected genes) are duplicated in toptable
-# This allows highlighted genes to be plotted twice, ensuring they aren't buried
-update.toptable <- function(geneList, toptable) {
-  gene.reps <- toptable[grep("\\.r$", toptable$Gene), ]
-  gene.reps$Gene <- sapply(gene.reps$Gene, FUN = function(x) substr(x, 1, nchar(x)-2))
-  gene.reps <- gene.reps[gene.reps$Gene %in% geneList, ]
-  gene.reps <- rbind(gene.reps, toptable[toptable$Gene %in% geneList[!geneList %in% gene.reps$Gene], ])
-  gene.reps$Gene <- paste0(gene.reps$Gene, ".r")
-  toptable <- rbind(toptable[-1*grep("\\.r$", toptable$Gene),], gene.reps)
-  return(toptable)
-}
-
 makeGeneTable <- function(toptable, geneList) {
   subset(toptable, Gene %in% geneList) %>%
     mutate(Category = sanitizeCategory(Category))
 }
 
-updateGeneList <- function(geneList, gene) {
-  
-}
-
-# This can be removed
 updateGeneList <- function(gene, geneList) {
   if(length(gene) == 0) { 
     return(geneList) 
@@ -267,14 +263,13 @@ ui <- fluidPage(
 server <- function(input, output) {
   
   #---- Define Reactive Values ----
-  
-  
   values <- reactiveValues()
   values$toptable <- data.frame()
   values$geneTable <- data.frame()
   values$geneList <- character()
   values$conditional <- "gene"
   
+  #Update all fields when dataset is changed
   observeEvent(input$dataset, {
     
     values$geneList <- gene.sets[[input$dataset]]
@@ -288,57 +283,7 @@ server <- function(input, output) {
     )
     
   })
-  
-  
-  # toptable <- reactive({
-  #   #---- create table ----
-  #   
-  #   toptable <- data.frame(
-  #     Gene = datasets[[input$dataset]]$gene,
-  #     Log2FC = datasets[[input$dataset]]$log2FoldChange,
-  #     Log10P = ifelse(datasets[[input$dataset]]$padj == 0, .Machine$double.xmin, datasets[[input$dataset]]$padj) %>% 
-  #       log10() %>% 
-  #       "*"(-1)
-  #   )
-  #   
-  #   #Names the categories/colors
-  #   toptable$Category <- ifelse(
-  #     toptable$Log2FC < input$log2FC*-1 & toptable$Log10P > input$logpval,
-  #     "IWP2",
-  #     ifelse(
-  #       toptable$Log2FC > input$log2FC & toptable$Log10P > input$logpval,
-  #       "CHIR",
-  #       "Below Threshold"  
-  #     )
-  #   ) 
-  #   
-  #   toptable$Category <- ifelse(
-  #     toptable$Category == "IWP2" & toptable$Gene %in% c(gene.sets[[input$dataset]],
-  #                                                        paste0(gene.sets[[input$dataset]], ".r")),
-  #     "IWP2highlight",
-  #     ifelse(
-  #       toptable$Category == "CHIR" & toptable$Gene %in% c(gene.sets[[input$dataset]],
-  #                                                          paste0(gene.sets[[input$dataset]], ".r")),
-  #       "CHIRhighlight",
-  #       toptable$Category
-  #     )
-  #   )
-  #   
-  #   toptable <- toptable[ , c(1,4,2,3)]
-  #   return(toptable)
-  #   
-  # })   # As it stands, labels get wiped out every time logFC/ pCutoff gets adjusted.
-  # This can probably be fixed by moving from gene.sets[[input$dataset]] to a reactiveGeneSet that get's refreshed every time the dataset changes
-  
-  # geneTable <- reactive({
-  #   subset(toptable(), Gene %in% gene.sets[[input$dataset]]) %>%
-  #     mutate(Category = sanitizeCategory(Category))
-  # })
-  
-  # geneList <- reactive({
-  #   gene.sets[[input$dataset]]
-  # })
-  
+
   colorMap <- reactive({
     list(
       IWP2 = input$IWP2col,
@@ -349,19 +294,6 @@ server <- function(input, output) {
       textCol = "black"
     )
   })
-  
-  # values <- reactiveValues()
-  # values$toptable <- data.frame()
-  # values$geneTable <- data.frame()
-  # values$geneList <- character()
-  # values$conditional <- "gene"
-  
-  # Stashing these tables as values (vs reactive expressions) allows for update on click
-  # observe ({
-  #   values$toptable <- toptable()
-  #   values$geneTable <- geneTable()
-  # })
-  
 
   #---- Conditional Panel Control ----
 
@@ -488,7 +420,6 @@ server <- function(input, output) {
     }
   })
   
- 
   reactiveVolcano <- reactive ({
     bespokeVolcano(
       toptable = categorize.toptable(
@@ -520,19 +451,7 @@ server <- function(input, output) {
       drawLabel = input$drawLabels,
       colorMap = colorMap()
     )
-  }) # %>%
-  # #     bindCache(input$log2FC, 
-  # #               input$logpval,
-  # #               input$pointSize,
-  # #               input$drawLabels,
-  # #               input$labelSize,
-  # #               input$pointAlpha,
-  # #               input$xlim,
-  # #               input$dataset,
-  # #               input$IWP2highlight,
-  # #               input$CHIRHighlight,
-  # #               input$IWP2Col,
-  # #               input$CHIRCol)
+  })
   
   output$volcanoPlot <- renderPlot({
       reactiveVolcano()
