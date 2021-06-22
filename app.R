@@ -31,34 +31,44 @@ gene.sets <- list(
 )
 
 # Server Side Functions ----
-update.toptable <- function(gene, toptable, geneTable) {
-  if(length(gene) == 0) { 
-    return(toptable) 
-  } else if(gene %in% geneTable$Gene) {
-    toptable <- toptable[!toptable$Gene == paste0(gene, ".r"), ]
-    toptable$Category[toptable$Gene == gene] <- toptable$Category[toptable$Gene == gene] %>%
-      sanitizeCategory() # LMAO good thing IWP2 and CHIR are the same number of characters otherwise this wouldnt work
-  } else {
-    new_row <- toptable[toptable$Gene %in% gene, ]
-    new_row$Gene <- paste0(new_row$Gene, ".r")
-    toptable <- rbind(toptable, new_row)
-    if(toptable$Category[which(toptable$Gene == gene)] != "Below Threshold") {
-      toptable$Category[which(toptable$Gene %in% c(gene, paste0(gene, ".r") ))] <- paste0(toptable$Category[toptable$Gene %in% gene], "highlight")
-    }
-  }
+categorize.toptable <- function(toptable, geneList, log2FC, log10P) {
+  toptable$Category <- ifelse(
+    toptable$Log2FC < log2FC*-1 & toptable$Log10P > log10P,
+    "IWP2",
+    ifelse(
+      toptable$Log2FC > log2FC & toptable$Log10P > log10P,
+      "CHIR",
+      "Below Threshold"  
+    )
+  ) 
+  
+  toptable$Category <- ifelse(
+    toptable$Category == "IWP2" & toptable$Gene %in% c(geneList,
+                                                       paste0(geneList, ".r")),
+    "IWP2highlight",
+    ifelse(
+      toptable$Category == "CHIR" & toptable$Gene %in% c(geneList,
+                                                         paste0(geneList, ".r")),
+      "CHIRhighlight",
+      toptable$Category
+    )
+  )
+  
+  toptable <- toptable[ , c(1,4,2,3)]
+  toptable <- toptable %>% arrange(Category)
   return(toptable)
 }
 
-update.genetable <- function(gene, toptable, geneTable) {
-  if(length(gene) == 0) { 
-    return(geneTable) 
-  } else if(gene %in% geneTable$Gene) {
-    geneTable <- geneTable[!geneTable$Gene == gene, ]
-  } else {
-    new_row <- toptable[toptable$Gene %in% gene, ]
-    new_row$Category <- sanitizeCategory(new_row$Category)
-    geneTable <- rbind(geneTable, new_row) 
-  }
+# Ensures that selected genes (and only selected genes) are duplicated in toptable
+# This allows highlighted genes to be plotted twice, ensuring they aren't buried
+update.toptable <- function(geneList, toptable) {
+  gene.reps <- toptable[grep("\\.r$", toptable$Gene), ]
+  gene.reps$Gene <- sapply(gene.reps$Gene, FUN = function(x) substr(x, 1, nchar(x)-2))
+  gene.reps <- gene.reps[gene.reps$Gene %in% geneList, ]
+  gene.reps <- rbind(gene.reps, toptable[toptable$Gene %in% geneList[!geneList %in% gene.reps$Gene], ])
+  gene.reps$Gene <- paste0(gene.reps$Gene, ".r")
+  toptable <- rbind(toptable[-1*grep("\\.r$", toptable$Gene),], gene.reps)
+  return(toptable)
 }
 
 makeGeneTable <- function(toptable, geneList) {
@@ -66,6 +76,21 @@ makeGeneTable <- function(toptable, geneList) {
     mutate(Category = sanitizeCategory(Category))
 }
 
+updateGeneList <- function(geneList, gene) {
+  
+}
+
+# This can be removed
+updateGeneList <- function(gene, geneList) {
+  if(length(gene) == 0) { 
+    return(geneList) 
+  } else if(gene %in% geneList) {
+    geneList <- geneList[!geneList == gene]
+  } else {
+    geneList <- c(gene, geneList)
+  }
+  return(geneList)
+}
 
 sanitizeCategory <- function(category) {
   if(length(grep("highlight", category)) > 0) {
@@ -243,10 +268,18 @@ server <- function(input, output) {
   
   #---- Define Reactive Values ----
   
-  toptable <- reactive({
-    #---- create table ----
+  
+  values <- reactiveValues()
+  values$toptable <- data.frame()
+  values$geneTable <- data.frame()
+  values$geneList <- character()
+  values$conditional <- "gene"
+  
+  observeEvent(input$dataset, {
     
-    toptable <- data.frame(
+    values$geneList <- gene.sets[[input$dataset]]
+    
+    values$toptable <- data.frame(
       Gene = datasets[[input$dataset]]$gene,
       Log2FC = datasets[[input$dataset]]$log2FoldChange,
       Log10P = ifelse(datasets[[input$dataset]]$padj == 0, .Machine$double.xmin, datasets[[input$dataset]]$padj) %>% 
@@ -254,43 +287,57 @@ server <- function(input, output) {
         "*"(-1)
     )
     
-    #Names the categories/colors
-    toptable$Category <- ifelse(
-      toptable$Log2FC < input$log2FC*-1 & toptable$Log10P > input$logpval,
-      "IWP2",
-      ifelse(
-        toptable$Log2FC > input$log2FC & toptable$Log10P > input$logpval,
-        "CHIR",
-        "Below Threshold"  
-      )
-    ) 
-    
-    toptable$Category <- ifelse(
-      toptable$Category == "IWP2" & toptable$Gene %in% c(gene.sets[[input$dataset]],
-                                                         paste0(gene.sets[[input$dataset]], ".r")),
-      "IWP2highlight",
-      ifelse(
-        toptable$Category == "CHIR" & toptable$Gene %in% c(gene.sets[[input$dataset]],
-                                                           paste0(gene.sets[[input$dataset]], ".r")),
-        "CHIRhighlight",
-        toptable$Category
-      )
-    )
-    
-    toptable <- toptable[ , c(1,4,2,3)]
-    return(toptable)
-    
-  })   # As it stands, labels get wiped out every time logFC/ pCutoff gets adjusted.
+  })
+  
+  
+  # toptable <- reactive({
+  #   #---- create table ----
+  #   
+  #   toptable <- data.frame(
+  #     Gene = datasets[[input$dataset]]$gene,
+  #     Log2FC = datasets[[input$dataset]]$log2FoldChange,
+  #     Log10P = ifelse(datasets[[input$dataset]]$padj == 0, .Machine$double.xmin, datasets[[input$dataset]]$padj) %>% 
+  #       log10() %>% 
+  #       "*"(-1)
+  #   )
+  #   
+  #   #Names the categories/colors
+  #   toptable$Category <- ifelse(
+  #     toptable$Log2FC < input$log2FC*-1 & toptable$Log10P > input$logpval,
+  #     "IWP2",
+  #     ifelse(
+  #       toptable$Log2FC > input$log2FC & toptable$Log10P > input$logpval,
+  #       "CHIR",
+  #       "Below Threshold"  
+  #     )
+  #   ) 
+  #   
+  #   toptable$Category <- ifelse(
+  #     toptable$Category == "IWP2" & toptable$Gene %in% c(gene.sets[[input$dataset]],
+  #                                                        paste0(gene.sets[[input$dataset]], ".r")),
+  #     "IWP2highlight",
+  #     ifelse(
+  #       toptable$Category == "CHIR" & toptable$Gene %in% c(gene.sets[[input$dataset]],
+  #                                                          paste0(gene.sets[[input$dataset]], ".r")),
+  #       "CHIRhighlight",
+  #       toptable$Category
+  #     )
+  #   )
+  #   
+  #   toptable <- toptable[ , c(1,4,2,3)]
+  #   return(toptable)
+  #   
+  # })   # As it stands, labels get wiped out every time logFC/ pCutoff gets adjusted.
   # This can probably be fixed by moving from gene.sets[[input$dataset]] to a reactiveGeneSet that get's refreshed every time the dataset changes
   
-  geneTable <- reactive({
-    subset(toptable(), Gene %in% gene.sets[[input$dataset]]) %>%
-      mutate(Category = sanitizeCategory(Category))
-  })
+  # geneTable <- reactive({
+  #   subset(toptable(), Gene %in% gene.sets[[input$dataset]]) %>%
+  #     mutate(Category = sanitizeCategory(Category))
+  # })
   
-  geneList <- reactive({
-    gene.sets[[input$dataset]]
-  })
+  # geneList <- reactive({
+  #   gene.sets[[input$dataset]]
+  # })
   
   colorMap <- reactive({
     list(
@@ -303,18 +350,18 @@ server <- function(input, output) {
     )
   })
   
-  values <- reactiveValues()
-  values$toptable <- data.frame()
-  values$geneTable <- data.frame()
-  values$geneList <- character()
-  values$conditional <- "gene"
+  # values <- reactiveValues()
+  # values$toptable <- data.frame()
+  # values$geneTable <- data.frame()
+  # values$geneList <- character()
+  # values$conditional <- "gene"
   
   # Stashing these tables as values (vs reactive expressions) allows for update on click
-  observe ({
-    values$toptable <- toptable()
-    values$geneTable <- geneTable()
-    values$geneList <- geneList()
-  })
+  # observe ({
+  #   values$toptable <- toptable()
+  #   values$geneTable <- geneTable()
+  # })
+  
 
   #---- Conditional Panel Control ----
 
@@ -366,21 +413,25 @@ server <- function(input, output) {
   #---- Gene Updating ----
   #Updates DataTable - GT based on plot click input
   observeEvent(input$plot_click, {
-    click_gene <- nearPoints(toptable(),
+    click_gene <- nearPoints(values$toptable,
                              input$plot_click,
                              xvar = "Log2FC",
                              yvar = "Log10P",
                              maxpoints = 1)$Gene
-    values$toptable <- update.toptable(click_gene, values$toptable, values$geneTable) #Be sure to update toptable values first
-    values$geneTable <- update.genetable(click_gene, values$toptable, values$geneTable)
-    values$geneList <- c(values$geneList, click_gene)
+    
+    values$geneList <- updateGeneList(click_gene, values$geneList)
+    values$toptable <- update.toptable(values$geneList, values$toptable) #Be sure to update toptable values first
+    # values$geneTable <- update.genetable(click_gene, values$toptable, values$geneTable)
+    
   })
 
   # Updates DataTable - GT based on selectizeInput + addGene combination
   observeEvent(input$addGene, {
-    values$toptable <- update.toptable(input$updateGene, values$toptable, values$geneTable)
-    values$geneTable <- update.genetable(input$updateGene, values$toptable, values$geneTable)
-    values$geneList <- c(values$geneList, click_gene)
+    values$geneList <- updateGeneList(input$updateGene, values$geneList)
+    values$toptable <- update.toptable(values$geneList, values$toptable)
+    # values$toptable <- update.toptable(input$updateGene, values$toptable, values$geneTable)
+    # values$geneTable <- update.genetable(input$updateGene, values$toptable, values$geneTable)
+    # values$geneList <- c(values$geneList, click_gene)
   })
 
   # Populates selectize input with all genes in toptable, except those that were duplicated
@@ -388,7 +439,7 @@ server <- function(input, output) {
   observe({
     updateSelectizeInput(
       inputId = "updateGene",
-      choices = toptable()$Gene[!str_detect(toptable()$Gene, ".r$")],
+      choices = values$toptable$Gene[!str_detect(values$toptable$Gene, ".r$")],
       selected = "",
       server = T
     )
@@ -397,12 +448,19 @@ server <- function(input, output) {
   #---- Output ----
   
   output$geneTable <- renderDataTable({
-    geneTable <- makeGeneTable(values$toptable, values$geneList)
+    geneTable <- makeGeneTable(
+      categorize.toptable(values$toptable,
+                          values$geneList,
+                          input$log2FC,
+                          input$logpval),
+      values$geneList
+    )
+    geneTable
     data.frame(
-      Gene = values$geneTable$Gene,
-      Condition = values$geneTable$Category,
-      Log2FC = values$geneTable$Log2FC %>% round(2),
-      Log10P = values$geneTable$Log10P %>% round(0)
+      Gene = geneTable$Gene,
+      Condition = geneTable$Category,
+      Log2FC = geneTable$Log2FC %>% round(2),
+      Log10P = geneTable$Log10P %>% round(0)
     )
   },
     options = list(# Javascript Options
@@ -418,7 +476,8 @@ server <- function(input, output) {
   
   # Display the gene of plot point underneath mouse
   output$hover_info <- renderText({
-    gene.name <- nearPoints(toptable(), input$plot_hover,
+    gene.name <- nearPoints(values$toptable,
+                            input$plot_hover,
                             xvar = "Log2FC",
                             yvar = "Log10P",
                             maxpoints = 1)[[1]]
@@ -432,9 +491,20 @@ server <- function(input, output) {
  
   reactiveVolcano <- reactive ({
     bespokeVolcano(
-      toptable = values$toptable %>%
-        arrange(Category),
-      geneTable = values$geneTable,
+      toptable = categorize.toptable(
+        values$toptable,
+        values$geneList,
+        input$log2FC,
+        input$logpval
+        ),
+      geneTable = makeGeneTable(
+        categorize.toptable(
+          values$toptable,
+          values$geneList,
+          input$log2FC,
+          input$logpval),
+        values$geneList
+      ),
       title = paste0(
         "Day ",
         substr(input$dataset, 5, nchar(input$dataset)),
