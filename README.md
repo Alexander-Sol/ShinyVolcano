@@ -4,5 +4,5 @@ This project is hosted at [https://a-sol.shinyapps.io/shinyvolcano/](https://a-s
 
 Currently, this app only works with three specific datasets. In the future, I hope to extend this to be a general framework for interactive volcano plots, but there are only so many hours in a day. 
 
-If you have any questions, just open an issue and I'll lend a hand
+If you have any questions, I can be reached [[insert science twitter here]]
 
