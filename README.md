@@ -2,6 +2,7 @@
 
 This project is hosted at [https://a-sol.shinyapps.io/shinyvolcano/](https://a-sol.shinyapps.io/shinyvolcano/ "ShinyApps host link"). 
 
-Currently, this app is only designed to work with two specific datasets and one color scheme. However, it will probably be extended at some point in the future.
+Currently, this app is only works with three specific datasets that are hardcoded in. In the future, I hope to extend this to be a general framework for interactive volcano plots, but there are only so many hours in a day. 
 
-In a (potentially misguided) effort to reduce load times and protect data, all gene names for the DESeq2 DEA results have been stripped, with the exception of those that are labeled on the plot. 
+If you have any questions, just open an issue and I'll lend a hand
+
