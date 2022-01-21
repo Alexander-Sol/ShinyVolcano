@@ -32,7 +32,8 @@ datasetDisplayNames <- c("Day 20 Prosensory" = "Day_20",
 # when a dataset is loaded in. The names in the list should correspond to the names
 # in the dataset list
 gene.sets <- list(
-    Day_20 = c("FBXO2"),
+    Day_20 = c("NR2F2", "RSPO3", "EDN3", "LRP2", "SULF1", "GAS1", "PTCH1", "OTX1", "KDM7A","TAGLN",
+               "CXCR4", "JAG1", "DLX5", "GPR155", "ACSL4", "MSX1"),
     Day_80 = c("NR2F1", "GATA3", "INSM1", "ZNF503", "FGF8", "GNG8", "LFNG", "FGFR3", "LGR5", "RPRM",
                "CD164L2", "ZBBX", "TEKT1", "SKOR1", "AMPD3", "VEPH1"),
     Day_109 = c("GATA3", "NR2F1", "INSM1", "HES6", "TMPRSS3", "GNG8", "ZNF503",
