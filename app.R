@@ -16,10 +16,8 @@ library(shinyWidgets)
 library(colourpicker)
 
 #Adding + removing gene labels breaks it for some reason, idk why
-day20 <- readRDS("data/c13.2.rds")
-day20 <- day20[-1]
 datasets <- list(
-    Day_20 = day20,
+    Day_20 = readRDS("data/day20deseq_verbose.rds"),
     Day_80 = readRDS("data/day80deseq_verbose.rds"),
     Day_109 = readRDS("data/day109deseq_verbose.rds")
 )
@@ -30,6 +28,9 @@ datasetDisplayNames <- c("Day 20 Prosensory" = "Day_20",
                           "Day 80 Hair Cells" = "Day_80",
                           "Day 109 Hair Cells" = "Day_109")
 
+# gene.set is a named list of named character vectors, containing the genes to highlight
+# when a dataset is loaded in. The names in the list should correspond to the names
+# in the dataset list
 gene.sets <- list(
     Day_20 = c("FBXO2"),
     Day_80 = c("NR2F1", "GATA3", "INSM1", "ZNF503", "FGF8", "GNG8", "LFNG", "FGFR3", "LGR5", "RPRM",
@@ -48,14 +49,22 @@ gene.sets <- list(
 # Ensures that selected genes (and only selected genes) are duplicated in toptable
 # This allows highlighted genes to be plotted twice, ensuring they aren't buried
 update.toptable <- function(geneList, toptable) {
-  print("updating toptable")
   gene.reps <- toptable[grep("\\.r$", toptable$Gene), ]
   gene.reps$Gene <- sapply(gene.reps$Gene, FUN = function(x) substr(x, 1, nchar(x)-2))
   gene.reps <- gene.reps[gene.reps$Gene %in% geneList, ]
   gene.reps <- rbind(gene.reps, toptable[toptable$Gene %in% geneList[!geneList %in% gene.reps$Gene], ])
   gene.reps$Gene <- paste0(gene.reps$Gene, ".r")
-  toptable <- rbind(toptable[-1*grep("\\.r$", toptable$Gene),], gene.reps)
+  
+  # This binds all rows in the toptable that aren't replicates ( -1*grep("\\.r$", toptable$Gene) )
+  # with the new list of replicated genes. BUT !!! if there aren't any replicated genes,
+  # it returns an empty dataframe. Hence, the if clause
+  if ( grep("\\.r$", toptable$Gene) %>% length() == 0 ) { 
+    toptable <- rbind(toptable, gene.reps)
+  } else {
+    toptable <- rbind(toptable[-1*grep("\\.r$", toptable$Gene),], gene.reps)
+    }
   return(toptable)
+  
 }
 
 
@@ -64,7 +73,6 @@ update.toptable <- function(geneList, toptable) {
 # Note: Nested ifelse statements are, like, not great. *shrug* 
 categorize.toptable <- function(toptable, geneList, log2FC, log10P) {
   
-  print("categorizing toptable")
   toptable$Category <- ifelse(
     toptable$Log2FC < log2FC*-1 & toptable$Log10P > log10P,
     "IWP2",
@@ -89,9 +97,7 @@ categorize.toptable <- function(toptable, geneList, log2FC, log10P) {
   
   toptable <- toptable[ , c(1,4,2,3)]
   toptable <- toptable %>% arrange(Category)
-  print(names(toptable))
-  print(unique(toptable$Category))
-  print(toptable)
+
   return(toptable)
 }
 
@@ -274,7 +280,7 @@ ui <- fluidPage(
            helpText("Hover over a data point to show the gene name (above)"),
            helpText("Click a data point to highlight it on the plot"),
            helpText("Search for a gene (under the Gene Table tab) to highlight its position on the plot"),
-           verbatimTextOutput("debug")
+           #verbatimTextOutput("debug")
         )
     )
 )
@@ -382,9 +388,6 @@ server <- function(input, output) {
   observeEvent(input$addGene, {
     values$geneList <- updateGeneList(input$updateGene, values$geneList)
     values$toptable <- update.toptable(values$geneList, values$toptable)
-    # values$toptable <- update.toptable(input$updateGene, values$toptable, values$geneTable)
-    # values$geneTable <- update.genetable(input$updateGene, values$toptable, values$geneTable)
-    # values$geneList <- c(values$geneList, click_gene)
   })
 
   # Populates selectize input with all genes in toptable, except those that were duplicated
