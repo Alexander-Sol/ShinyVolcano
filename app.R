@@ -15,15 +15,23 @@ library(ggrepel)
 library(shinyWidgets)
 library(colourpicker)
 
+#Adding + removing gene labels breaks it for some reason, idk why
+day20 <- readRDS("data/c13.2.rds")
+day20 <- day20[-1]
 datasets <- list(
-    Day_20 = readRDS("data/day20deseq_verbose.rds"),
+    Day_20 = day20,
     Day_80 = readRDS("data/day80deseq_verbose.rds"),
     Day_109 = readRDS("data/day109deseq_verbose.rds")
 )
 
+# Named Character vector ("Name" = "Character"), where the characters
+# represent the names in the datasets list, and the names are displayed in the GUI
+datasetDisplayNames <- c("Day 20 Prosensory" = "Day_20",
+                          "Day 80 Hair Cells" = "Day_80",
+                          "Day 109 Hair Cells" = "Day_109")
+
 gene.sets <- list(
-    Day_20 = c("NR2F2", "RSPO3", "EDN3", "LRP2", "SULF1", "GAS1", "PTCH1", "OTX1", "KDM7A",
-      "TAGLN", "CXCR4", "JAG1", "DLX5", "GPR155", "ACSL4", "MSX1"),
+    Day_20 = c("FBXO2"),
     Day_80 = c("NR2F1", "GATA3", "INSM1", "ZNF503", "FGF8", "GNG8", "LFNG", "FGFR3", "LGR5", "RPRM",
                "CD164L2", "ZBBX", "TEKT1", "SKOR1", "AMPD3", "VEPH1"),
     Day_109 = c("GATA3", "NR2F1", "INSM1", "HES6", "TMPRSS3", "GNG8", "ZNF503",
@@ -32,9 +40,15 @@ gene.sets <- list(
 
 # Server Side Functions ----
 
+# Note: Toptable is a reactive (updates in response to changing inputs) data.frame
+#       that is instantiated in the server. It contains gene names, logFC, and -log10 p.vals.
+#       Toptable is used as the input to bespokeVolcano, a bastardization of EnhancedVolcano 
+#       from the EnhancedVolcano package
+
 # Ensures that selected genes (and only selected genes) are duplicated in toptable
 # This allows highlighted genes to be plotted twice, ensuring they aren't buried
 update.toptable <- function(geneList, toptable) {
+  print("updating toptable")
   gene.reps <- toptable[grep("\\.r$", toptable$Gene), ]
   gene.reps$Gene <- sapply(gene.reps$Gene, FUN = function(x) substr(x, 1, nchar(x)-2))
   gene.reps <- gene.reps[gene.reps$Gene %in% geneList, ]
@@ -44,7 +58,13 @@ update.toptable <- function(geneList, toptable) {
   return(toptable)
 }
 
+
+# This classifies toptable entries as being above/below p-value and fold change 
+# cutoffs
+# Note: Nested ifelse statements are, like, not great. *shrug* 
 categorize.toptable <- function(toptable, geneList, log2FC, log10P) {
+  
+  print("categorizing toptable")
   toptable$Category <- ifelse(
     toptable$Log2FC < log2FC*-1 & toptable$Log10P > log10P,
     "IWP2",
@@ -69,6 +89,9 @@ categorize.toptable <- function(toptable, geneList, log2FC, log10P) {
   
   toptable <- toptable[ , c(1,4,2,3)]
   toptable <- toptable %>% arrange(Category)
+  print(names(toptable))
+  print(unique(toptable$Category))
+  print(toptable)
   return(toptable)
 }
 
@@ -137,9 +160,7 @@ ui <- fluidPage(
         sidebarPanel(
           
           selectInput("dataset", "Dataset",
-                      c("Day 20 Prosensory" = "Day_20",
-                        "Day 80 Hair Cells" = "Day_80",
-                        "Day 109 Hair Cells" = "Day_109"),
+                      datasetDisplayNames,
                       width = '200px'
           ),
           
@@ -252,14 +273,14 @@ ui <- fluidPage(
            br(),
            helpText("Hover over a data point to show the gene name (above)"),
            helpText("Click a data point to highlight it on the plot"),
-           helpText("Search for a gene (under the Gene Table tab) to highlight its position on the plot")
-           # verbatimTextOutput("debug")
+           helpText("Search for a gene (under the Gene Table tab) to highlight its position on the plot"),
+           verbatimTextOutput("debug")
         )
     )
 )
 
 
-# Define server logic required to draw a histogram
+# Define server logic required to create/update the Volcano Plot
 server <- function(input, output) {
   
   #---- Define Reactive Values ----
@@ -277,8 +298,8 @@ server <- function(input, output) {
     values$toptable <- data.frame(
       Gene = datasets[[input$dataset]]$gene,
       Log2FC = datasets[[input$dataset]]$log2FoldChange,
-      Log10P = ifelse(datasets[[input$dataset]]$padj == 0, .Machine$double.xmin, datasets[[input$dataset]]$padj) %>% 
-        log10() %>% 
+      Log10P = ifelse(datasets[[input$dataset]]$padj == 0, .Machine$double.xmin, datasets[[input$dataset]]$padj) %>%
+        log10() %>%
         "*"(-1)
     )
     
@@ -485,9 +506,10 @@ server <- function(input, output) {
       }
   )
   
-  # output$debug <- renderText({
-  #   values$conditional
-  # })
+  output$debug <- renderText({
+    values$conditional
+    values$geneList
+  })
   
   
 }
