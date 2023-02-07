@@ -316,6 +316,7 @@ server <- function(input, output) {
   values$datasets <- datasets
   values$validUserData <- FALSE
   values$errorMessage <- "Unknown Error Encountered"
+  values$plotTitle <- " "
   
   observeEvent(input$userFile, {
     
@@ -349,6 +350,7 @@ server <- function(input, output) {
         defaultGene <- c(
           values$datasets[[input$dataset]][order(values$datasets[[input$dataset]]$padj, decreasing = FALSE)[1], "gene"])
         values$geneList <- updateGeneList(defaultGene, values$geneList)
+        values$plotTile <- "Custom Volcano Plot"
       } else {
         return()
       }
@@ -361,6 +363,15 @@ server <- function(input, output) {
         log10() %>%
         "*"(-1)
     )
+    
+    if (input$dataset != "userFile"){
+      values$plotTile <- paste0(
+        "Day ",
+        substr(input$dataset, 5, nchar(input$dataset)),
+        if( input$dataset == "Day_20" ) { " Prosensory" } else {" Hair" },
+        " Cells: IWP2 vs CHIR"
+      )
+    }
     
   })
 
@@ -524,12 +535,7 @@ server <- function(input, output) {
           input$logpval),
         values$geneList
       ),
-      title = paste0(
-        "Day ",
-        substr(input$dataset, 5, nchar(input$dataset)),
-        if( input$dataset == "Day_20" ) { " Prosensory" } else {" Hair" },
-        " Cells: IWP2 vs CHIR"
-        ),
+      title = values$plotTitle,
       pCutoff = input$logpval,
       FCcutoff = input$log2FC,
       pointSize = input$pointSize,
