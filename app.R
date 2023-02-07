@@ -14,19 +14,22 @@ library(ggplot2)
 library(ggrepel)
 library(shinyWidgets)
 library(colourpicker)
+library(tools)
 
 #Adding + removing gene labels breaks it for some reason, idk why
 datasets <- list(
     Day_20 = readRDS("data/day20deseq_verbose.rds"),
     Day_80 = readRDS("data/day80deseq_verbose.rds"),
-    Day_109 = readRDS("data/day109deseq_verbose.rds")
+    Day_109 = readRDS("data/day109deseq_verbose.rds"),
+    userFile = NULL
 )
 
 # Named Character vector ("Name" = "Character"), where the characters
 # represent the names in the datasets list, and the names are displayed in the GUI
 datasetDisplayNames <- c("Day 20 Prosensory" = "Day_20",
                           "Day 80 Hair Cells" = "Day_80",
-                          "Day 109 Hair Cells" = "Day_109")
+                          "Day 109 Hair Cells" = "Day_109",
+                          "Custom Dataset" = "userFile")
 
 # gene.set is a named list of named character vectors, containing the genes to highlight
 # when a dataset is loaded in. The names in the list should correspond to the names
@@ -37,7 +40,8 @@ gene.sets <- list(
     Day_80 = c("NR2F1", "GATA3", "INSM1", "ZNF503", "FGF8", "GNG8", "LFNG", "FGFR3", "LGR5", "RPRM",
                "CD164L2", "ZBBX", "TEKT1", "SKOR1", "AMPD3", "VEPH1"),
     Day_109 = c("GATA3", "NR2F1", "INSM1", "HES6", "TMPRSS3", "GNG8", "ZNF503",
-                 "TEKT1", "NEUROD6", "ZBBX", "CD164L2", "PCDH20", "SKOR1", "VEPH1", "TEKT2", "TCTEX1D1")
+                 "TEKT1", "NEUROD6", "ZBBX", "CD164L2", "PCDH20", "SKOR1", "VEPH1", "TEKT2", "TCTEX1D1"),
+    userFile = c()
 )
 
 # Server Side Functions ----
@@ -71,7 +75,7 @@ update.toptable <- function(geneList, toptable) {
 
 # This classifies toptable entries as being above/below p-value and fold change 
 # cutoffs
-# Note: Nested ifelse statements are, like, not great. *shrug* 
+# Note: Nested ifelse statements are, hard to debug, and should be refactored eventually
 categorize.toptable <- function(toptable, geneList, log2FC, log10P) {
   
   toptable$Category <- ifelse(
@@ -133,16 +137,22 @@ textInputRow<-function (inputId, label, value = ""){
       tags$input(id = inputId, type = "text", value = value, class="input-small"))
 } 
 
-#----
+validateTable <- function(table){
+  if ("gene" %in% names(table) &
+      "log2FoldChange" %in% names(table) & 
+      "padj" %in% names(table)){
+    return(TRUE)
+  } else {
+    return(FALSE)
+  }
+}
 
 # ----Define UI ----
 ui <- fluidPage(
     
     #Suppress warnings
     tags$style(
-        type="text/css",
-               ".shiny-output-error { visibility: hidden; }",
-               ".shiny-output-error:before { visibility: hidden; }"
+        type="text/css"
     ),
     tags$head(tags$style(
       "#hover_info{color: black;
@@ -170,6 +180,13 @@ ui <- fluidPage(
                       datasetDisplayNames,
                       width = '200px'
           ),
+          
+          fileInput("userFile", "Upload new data as .csv",
+                    accept = c("text/csv",
+                               "text/comma-separated-values,text/plain",
+                               ".csv"),
+                    ),
+          
           
           conditionalPanel( # Gene Table Controls
             #-----------
@@ -296,16 +313,51 @@ server <- function(input, output) {
   values$geneTable <- data.frame()
   values$geneList <- character()
   values$conditional <- "gene"
+  values$datasets <- datasets
+  values$validUserData <- FALSE
+  values$errorMessage <- "Unknown Error Encountered"
+  
+  observeEvent(input$userFile, {
+    
+    inFile <- input$userFile
+    if(!file_ext(inFile$datapath) == "csv") {
+      values$errorMessage <- "Selected file must be a .csv"
+      values$validUserData <- FALSE
+      return()
+    } 
+    
+    inputData <- read.csv(inFile$datapath)
+    if(!validateTable(inputData)){
+      values$errorMessage <- "Input data must contain the following columns: \"gene\", \"log2FoldChange\", and \"padj\"."
+      values$validUserData <- FALSE
+      return()
+    }
+    
+    values$errorMessage <- "Unknown Error Encountered"
+    values$validUserData <- TRUE
+    values$datasets$userFile <- inputData
+  })
   
   #Update all fields when dataset is changed
   observeEvent(input$dataset, {
     
     values$geneList <- gene.sets[[input$dataset]]
     
+    # For user input data, need to populate the geneList with at least one entry
+    if (input$dataset == "userData"){
+      if (values$validUserData){
+        defaultGene <- c(
+          values$datasets[[input$dataset]][order(values$datasets[[input$dataset]]$padj, decreasing = FALSE)[1], "gene"])
+        values$geneList <- updateGeneList(defaultGene, values$geneList)
+      } else {
+        return()
+      }
+    }
+    
     values$toptable <- data.frame(
-      Gene = datasets[[input$dataset]]$gene,
-      Log2FC = datasets[[input$dataset]]$log2FoldChange,
-      Log10P = ifelse(datasets[[input$dataset]]$padj == 0, .Machine$double.xmin, datasets[[input$dataset]]$padj) %>%
+      Gene = values$datasets[[input$dataset]]$gene,
+      Log2FC = values$datasets[[input$dataset]]$log2FoldChange,
+      Log10P = ifelse(values$datasets[[input$dataset]]$padj == 0, .Machine$double.xmin, values$datasets[[input$dataset]]$padj) %>%
         log10() %>%
         "*"(-1)
     )
@@ -327,7 +379,6 @@ server <- function(input, output) {
 
   output$showGeneFinder <- reactive({
     values$conditional == "gene"
-    # (input$geneCustomize+1) %% 2 # Add whatever condition you want here. Must return TRUE or FALSE
   })
 
   output$showPlotControls <- reactive({
@@ -380,13 +431,15 @@ server <- function(input, output) {
                              maxpoints = 1)$Gene
     
     values$geneList <- updateGeneList(click_gene, values$geneList)
-    values$toptable <- update.toptable(values$geneList, values$toptable) #Be sure to update toptable values first
-    # values$geneTable <- update.genetable(click_gene, values$toptable, values$geneTable)
-    
+    values$toptable <- update.toptable(values$geneList, values$toptable)
   })
 
   # Updates DataTable - GT based on selectizeInput + addGene combination
   observeEvent(input$addGene, {
+    validate(
+      need(input$dataset != "userFile" || values$validUserData,
+           "User file is invalid")
+    )
     values$geneList <- updateGeneList(input$updateGene, values$geneList)
     values$toptable <- update.toptable(values$geneList, values$toptable)
   })
@@ -405,6 +458,11 @@ server <- function(input, output) {
   #---- Output ----
   
   output$geneTable <- renderDataTable({
+    validate(
+      need(input$dataset != "userFile" || values$validUserData,
+           "User file is invalid")
+    )
+    
     geneTable <- makeGeneTable(
       categorize.toptable(values$toptable,
                           values$geneList,
@@ -433,6 +491,11 @@ server <- function(input, output) {
   
   # Display the gene of plot point underneath mouse
   output$hover_info <- renderText({
+    validate(
+      need(input$dataset != "userFile" || values$validUserData,
+           "User file is invalid")
+    )
+    
     gene.name <- nearPoints(values$toptable,
                             input$plot_hover,
                             xvar = "Log2FC",
@@ -479,7 +542,11 @@ server <- function(input, output) {
   })
   
   output$volcanoPlot <- renderPlot({
-      reactiveVolcano()
+    validate(
+      need(input$dataset != "userFile" || values$validUserData,
+           values$errorMessage)
+    )
+    reactiveVolcano()
   })
 
   output$VolcanoPlotImage <- downloadHandler(

@@ -1,0 +1,7 @@
+﻿gene,log2FoldChange,padj
+GAPDH,2,1.00E-13
+APOE,-2,1.00E-12
+TGFBI,1,1.00E-11
+TP53,-1,1.00E-10
+TNF,0.5,1.00E-09
+FGFR2,-0.5,1.00E-08
