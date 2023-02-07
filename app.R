@@ -184,7 +184,7 @@ ui <- fluidPage(
           fileInput("userFile", "Upload new data as .csv",
                     accept = c("text/csv",
                                "text/comma-separated-values,text/plain",
-                               ".csv"),
+                               ".csv")
                     ),
           
           
@@ -344,7 +344,7 @@ server <- function(input, output) {
     values$geneList <- gene.sets[[input$dataset]]
     
     # For user input data, need to populate the geneList with at least one entry
-    if (input$dataset == "userData"){
+    if (input$dataset == "userFile"){
       if (values$validUserData){
         defaultGene <- c(
           values$datasets[[input$dataset]][order(values$datasets[[input$dataset]]$padj, decreasing = FALSE)[1], "gene"])
