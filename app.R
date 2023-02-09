@@ -83,7 +83,7 @@ update.toptable <- function(geneList, toptable) {
 # Note: Nested ifelse statements are, hard to debug, and should be refactored eventually
 categorize.toptable <- function(toptable, geneList, log2FC, log10P) {
   
-  toptable$Category <- ifelse(
+  toptable$Regulation <- ifelse(
     toptable$Log2FC < log2FC*-1 & toptable$Log10P > log10P,
     "Down",
     ifelse(
@@ -93,27 +93,27 @@ categorize.toptable <- function(toptable, geneList, log2FC, log10P) {
     )
   ) 
   
-  toptable$Category <- ifelse(
-    toptable$Category == "Down" & toptable$Gene %in% c(geneList,
+  toptable$Regulation <- ifelse(
+    toptable$Regulation == "Down" & toptable$Gene %in% c(geneList,
                                                        paste0(geneList, ".r")),
     "Downhighlight",
     ifelse(
-      toptable$Category == "Up" & toptable$Gene %in% c(geneList,
+      toptable$Regulation == "Up" & toptable$Gene %in% c(geneList,
                                                          paste0(geneList, ".r")),
       "Uphighlight",
-      toptable$Category
+      toptable$Regulation
     )
   )
   
   toptable <- toptable[ , c(1,4,2,3)]
-  toptable <- toptable %>% arrange(Category)
+  toptable <- toptable %>% arrange(Regulation)
 
   return(toptable)
 }
 
 makeGeneTable <- function(toptable, geneList) {
   subset(toptable, Gene %in% geneList) %>%
-    mutate(Category = sanitizeCategory(Category))
+    mutate(Regulation = sanitizeCategory(Regulation))
 }
 
 updateGeneList <- function(gene, geneList) {
@@ -495,7 +495,7 @@ server <- function(input, output) {
     geneTable
     data.frame(
       Gene = geneTable$Gene,
-      Condition = geneTable$Category,
+      Regulation = geneTable$Regulation,
       Log2FC = geneTable$Log2FC %>% round(2),
       Log10P = geneTable$Log10P %>% round(0)
     )

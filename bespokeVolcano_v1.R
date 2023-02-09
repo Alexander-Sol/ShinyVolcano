@@ -110,7 +110,7 @@ bespokeVolcano <- function(
       )
   
   # ---- Plot ----
-  plot <- ggplot(toptable, aes(x=Log2FC, y=Log10P, label = Gene, color = Category)) + th +
+  plot <- ggplot(toptable, aes(x=Log2FC, y=Log10P, label = Gene, color = Regulation)) + th +
     
     # over-ride legend icon sizes for colour and shape.
     # guide_legends are separate for colour and shape;
