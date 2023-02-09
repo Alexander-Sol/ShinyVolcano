@@ -54,6 +54,12 @@ gene.sets <- list(
 # Ensures that selected genes (and only selected genes) are duplicated in toptable
 # This allows highlighted genes to be plotted twice, ensuring they aren't buried
 update.toptable <- function(geneList, toptable) {
+  
+  if(length(geneList) == 0) {
+    toptable <- toptable[-1*grep("\\.r$", toptable$Gene),]
+    return(toptable)
+  }
+  
   gene.reps <- toptable[grep("\\.r$", toptable$Gene), ]
   gene.reps$Gene <- sapply(gene.reps$Gene, FUN = function(x) substr(x, 1, nchar(x)-2))
   gene.reps <- gene.reps[gene.reps$Gene %in% geneList, ]
@@ -67,9 +73,8 @@ update.toptable <- function(geneList, toptable) {
     toptable <- rbind(toptable, gene.reps)
   } else {
     toptable <- rbind(toptable[-1*grep("\\.r$", toptable$Gene),], gene.reps)
-    }
+  }
   return(toptable)
-  
 }
 
 
@@ -154,12 +159,15 @@ ui <- fluidPage(
     tags$style(
         type="text/css"
     ),
-    tags$head(tags$style(
+    tags$head(
+      tags$style(
       "#hover_info{color: black;
               font-size: 20px;
               font-style: bold;
-              }"
-    )),
+              }"),
+      tags$style(
+        type="text/css", ".dataTables_filter {display: none;    }")
+      ),
 
     # Application title
     titlePanel("Volcano Plot Customization"),
@@ -170,7 +178,7 @@ ui <- fluidPage(
     
     actionButton("colorCustomize", "Color Options"), #actionButtons iterate by 1 whenever they're clicked
     
-    actionButton("downloadCustomize", "Download Options"), #actionButtons iterate by 1 whenever they're clicked
+    actionButton("downloadCustomize", "Data Upload & Plot Export"), #actionButtons iterate by 1 whenever they're clicked
 
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
@@ -181,23 +189,17 @@ ui <- fluidPage(
                       width = '200px'
           ),
           
-          fileInput("userFile", "Upload new data as .csv",
-                    accept = c("text/csv",
-                               "text/comma-separated-values,text/plain",
-                               ".csv")
-                    ),
-          
-          
           conditionalPanel( # Gene Table Controls
             #-----------
             condition = "output.showGeneFinder",
-            dataTableOutput("geneTable"),
-            br(),
             selectizeInput("updateGene",
                            "Search Genes",
                            choices = NULL),
             actionButton("addGene",
-                         "Add/Remove Gene Label")
+                         "Add/Remove Gene Label"),
+            br(),
+            br(),
+            dataTableOutput("geneTable")
           ), #----
           
           conditionalPanel( # Plot Controls
@@ -278,6 +280,14 @@ ui <- fluidPage(
           conditionalPanel( # Download Controls
             #----
             condition = "output.showDownloadControls",
+            fileInput("userFile", "Differential expression data can be uploaded as a .csv file. 
+                      The file must contain the following columns: 
+                      \"gene\", \"log2FoldChange\", and \"padj\".",
+                      accept = c("text/csv",
+                                 "text/comma-separated-values,text/plain",
+                                 ".csv")
+            ),
+            h3("Plot Export Options"),
             textInputRow(inputId="downloadWidth", label="Download Width (in)", value = 8.0),
             textInputRow(inputId="downloadHeight", label="Download Height (in)", value = 6.0),
             br(),
@@ -303,6 +313,7 @@ ui <- fluidPage(
     )
 )
 
+#---- Server ----
 
 # Define server logic required to create/update the Volcano Plot
 server <- function(input, output) {
@@ -520,6 +531,7 @@ server <- function(input, output) {
   })
   
   reactiveVolcano <- reactive ({
+    
     bespokeVolcano(
       toptable = categorize.toptable(
         values$toptable,
@@ -588,7 +600,7 @@ server <- function(input, output) {
     values$geneList
   })
   
-  
+  traceback()
 }
 
 # Run the application 

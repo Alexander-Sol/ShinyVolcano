@@ -146,7 +146,7 @@ bespokeVolcano <- function(
   
   # Adds labels as text (if you want boxes behind the labels, use geom_label_repel)
   # Labels are constructed by subsetting toptable based on genes present in the reactive table 
-  if(drawLabel) {
+  if(drawLabel & nrow(geneTable) > 0) {
     plot <- plot +  geom_text_repel(
       data = subset(toptable, Gene %in% geneTable$Gene),
       aes(Log2FC, Log10P, label = Gene, color = "textCol"),
