@@ -85,22 +85,22 @@ categorize.toptable <- function(toptable, geneList, log2FC, log10P) {
   
   toptable$Category <- ifelse(
     toptable$Log2FC < log2FC*-1 & toptable$Log10P > log10P,
-    "IWP2",
+    "Down",
     ifelse(
       toptable$Log2FC > log2FC & toptable$Log10P > log10P,
-      "CHIR",
+      "Up",
       "Below Threshold"  
     )
   ) 
   
   toptable$Category <- ifelse(
-    toptable$Category == "IWP2" & toptable$Gene %in% c(geneList,
+    toptable$Category == "Down" & toptable$Gene %in% c(geneList,
                                                        paste0(geneList, ".r")),
-    "IWP2highlight",
+    "Downhighlight",
     ifelse(
-      toptable$Category == "CHIR" & toptable$Gene %in% c(geneList,
+      toptable$Category == "Up" & toptable$Gene %in% c(geneList,
                                                          paste0(geneList, ".r")),
-      "CHIRhighlight",
+      "Uphighlight",
       toptable$Category
     )
   )
@@ -129,7 +129,7 @@ updateGeneList <- function(gene, geneList) {
 
 sanitizeCategory <- function(category) {
   if(length(grep("highlight", category)) > 0) {
-    category[grep("highlight", category)] <- substring(category[grep("highlight", category)], 1, 4)
+    category[grep("highlight", category)] <- gsub("highlight", "", category[grep("highlight", category)])
     return( category )
   } else {
     return(category)
@@ -261,18 +261,18 @@ ui <- fluidPage(
             condition = "output.showColorControls",
             fluidRow(
               column(3,
-                     helpText("CHIR"),
-                     colourInput("CHIRcol", NULL, "#55A0FB"),
+                     helpText("Up"),
+                     colourInput("Upcol", NULL, "#55A0FB"),
                      br(),
-                     helpText("CHIR Highlight"),
-                     colourInput("CHIRhighlight", NULL, "#333194")
+                     helpText("Up Highlight"),
+                     colourInput("Uphighlight", NULL, "#333194")
               ),
               column(3,
-                     helpText("IWP2"),
-                     colourInput("IWP2col", NULL, "#B856D7"),
+                     helpText("Down"),
+                     colourInput("Downcol", NULL, "#B856D7"),
                      br(),
-                     helpText("IWP2 Highlight"),
-                     colourInput("IWP2highlight", NULL, "#8b0000")
+                     helpText("Down Highlight"),
+                     colourInput("Downhighlight", NULL, "#8b0000")
               ),
             ) 
           ), #----
@@ -380,7 +380,7 @@ server <- function(input, output) {
         "Day ",
         substr(input$dataset, 5, nchar(input$dataset)),
         if( input$dataset == "Day_20" ) { " Prosensory" } else {" Hair" },
-        " Cells: IWP2 vs CHIR"
+        " Cells: Down vs Up"
       )
     }
     
@@ -388,10 +388,10 @@ server <- function(input, output) {
 
   colorMap <- reactive({
     list(
-      IWP2 = input$IWP2col,
-      CHIR = input$CHIRcol,
-      IWP2highlight = input$IWP2highlight,
-      CHIRhighlight = input$CHIRhighlight,
+      Down = input$Downcol,
+      Up = input$Upcol,
+      Downhighlight = input$Downhighlight,
+      Uphighlight = input$Uphighlight,
       `Below Threshold` = 'lightgrey',
       textCol = "black"
     )

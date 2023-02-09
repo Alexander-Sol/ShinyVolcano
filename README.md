@@ -10,7 +10,7 @@ Hovering over a point on the volcano plot shows the name of the gene. Clicking a
 
 To use this app with your own data, upload a .csv file containing differential expression data in the Data Upload & Plot Export tab. The file must contain three columns, labeled "gene", "log2FoldChange", and "padj" containing gene names, fold change information, and the adjusted p-value, respectively.
 
-An example is included in the git repo: "ExampleUserInput.csv".
+An example file ("ExampleUserInput.csv") is included in the git repo.
 
 ## Docker
 This application can be used via Docker. Instructions for doing so can be found below.
@@ -24,13 +24,7 @@ docker run -p 3838:3838 alxsully/shiny-volcano:latest
 ```
 3. Open a web browser and type localhost:3838 (Windows) or 0.0.0.0:3838 into the search bar. 
  
-This app is designed to allow users to explore differential expression analysis results in an interactive fashion. The app comes with three datasets, but users are able to upload their own as a .csv file.
 
-To use this app with your own data, upload a .csv file containing differential expression data. The file must contain three columns, labeled "gene", "log2FoldChange", and "padj" containing gene names, fold change information, and the adjusted p-value, respectively.
-
-An example is included in the git repo: "ExampleUserInput.csv".
-
-Currently the conditions are hard-coded to CHIR and IWP2, but this will change in future iterations.
 
 If you have any questions, I can be reached at solivais@wisc.edu
 
